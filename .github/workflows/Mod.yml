@@ -106,7 +106,7 @@ jobs:
          if [ -n "$DNS_HOST_SHA" ]; then
           echo "Found commit: $DNS_HOST_SHA"
           git cherry-pick "$DNS_HOST_SHA" || true
-          else
+         else
           echo "$DNS_MSG"
          fi
         fi
