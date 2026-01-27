@@ -59,7 +59,7 @@ jobs:
             -o runtime.patch
 
           patch -d .go -p1 < runtime.patch
-        fi
+        
 
         echo "$(pwd)/.go/bin" >> $GITHUB_PATH
 
