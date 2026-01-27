@@ -174,10 +174,10 @@ jobs:
 
         echo "Initializing gomobile..."
         gomobile init -v
-
+        go mod tidy
         
         echo "Binding for Android..."
-        GOEXPERIMENT=greenteagc gomobile bind -v -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags='-s -w -buildid=' ./
+        gomobile bind -v -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags='-s -w -buildid=' ./
    
  
     - name: Upload build artifacts
