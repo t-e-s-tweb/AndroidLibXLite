@@ -40,12 +40,16 @@ jobs:
       run: |
         set -e
 
-        GO_VERSION=$(sed -n -E 's/^go (.*)/\1/p' go.mod)
-        echo "Using Go $GO_VERSION"
+        GO_VERSION=$(sed -n -E 's/^go ([0-9]+\.[0-9]+).*/\1/p' go.mod)
 
-        if [ ! -d ".go" ]; then
-          echo "Downloading Go..."
-          curl -L "https://go.dev/gomobile/go${GO_VERSION}.linux-amd64.tar.gz" -o go.tar.gz
+        echo "Go version from go.mod: $GO_VERSION"
+
+        # get latest patch version dynamically
+        FULL_VERSION=$(curl -s https://go.dev/VERSION?m=text | grep "^go$GO_VERSION")
+
+        echo "Resolved full version: $FULL_VERSION"
+
+          curl -L "https://go.dev/dl/${FULL_VERSION}.linux-amd64.tar.gz" -o go.tar.gz
           tar -xzf go.tar.gz
           mv go .go
 
