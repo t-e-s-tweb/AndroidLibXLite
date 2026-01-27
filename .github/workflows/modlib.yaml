@@ -210,7 +210,7 @@ jobs:
         go mod tidy
         
         echo "Binding for Android..."
-        gomobile bind -v -androidapi 24 -buildmode=pie athimpath -gcflags="all=-l=4" -ldflags='-s -w -buildid=' ./
+        gomobile bind -v -androidapi 24 -buildmode=pie -trimmpath -gcflags="all=-l=4" -ldflags='-s -w -buildid=' ./
    
  
     - name: Upload build artifacts
