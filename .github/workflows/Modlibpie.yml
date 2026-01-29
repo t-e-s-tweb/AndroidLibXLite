@@ -218,13 +218,20 @@ jobs:
         echo "Binding for Android..."
         # Export parallel compilation (uses all CPU cores for faster builds)
         export GOMAXPROCS=$(nproc)
+        
+
+
+
+        export CGO_CFLAGS="-O3 -flto=thin -fomit-frame-pointer -ffunction-sections -fdata-sections"
+        export CGO_CXXFLAGS="-O3 -flto=thin -fomit-frame-pointer -ffunction-sections -fdata-sections"
+        export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld"
 
         gomobile bind \
         -v \
         -androidapi 24 \
         -trimpath \
         -gcflags="all=-l=4" \
-        -ldflags="-s -w -buildid='' -linkmode=external -extldflags '-fuse-ld=lld -Wl,--gc-sections -Wl,--build-id=none -Wl,--strip-all'" \
+        -ldflags="-s -w -buildid='' -linkmode=external -extldflags '-fuse-ld=lld -flto=thin -O3 -Wl,--gc-sections -Wl,--build-id=none -Wl,--strip-all'" \
         ./
 
 
