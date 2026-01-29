@@ -108,15 +108,51 @@ jobs:
       with:
         add-to-path: false
         ndk-version: r27
-    - name: Add NDK to PATH
-      run: echo "NDK=$PWD/ndk/android-ndk-r27" >> $GITHUB_ENV
 
     - name: Build custom .so files
       shell: bash
       run: |
-        wget https://raw.githubusercontent.com/Exclude0122/libxivpn/refs/heads/master/build.sh
-        chmod +x build.sh
-        ./build.sh all patch
+        # Export paths and environment
+        export NDK=$PWD/ndk/android-ndk-r27
+        export GOOS=android
+        export CGO_ENABLED=1
+        export AR=$NDK/bin/llvm-ar
+        export LD=$NDK/bin/ld
+        export RANLIB=$NDK/bin/llvm-ranlib
+
+        # Clean previous builds
+        rm -f libxivpn_arm64.so libxivpn_x86_64.so libxivpn_armv7a.so
+
+        # Build all architectures
+        for arch in arm64 x86_64 armv7a; do
+          case $arch in
+            arm64)
+              export CGO_CFLAGS="-target aarch64-linux-android21"
+              export GOARCH=arm64
+              export CC=$NDK/bin/aarch64-linux-android21-clang
+              export CXX=$NDK/bin/aarch64-linux-android21-clang++
+              OUT=libxivpn_arm64.so
+              ;;
+            x86_64)
+              export CGO_CFLAGS="-target x86_64-linux-android21"
+              export GOARCH=amd64
+              export CC=$NDK/bin/x86_64-linux-android21-clang
+              export CXX=$NDK/bin/x86_64-linux-android21-clang++
+              OUT=libxivpn_x86_64.so
+              ;;
+            armv7a)
+              export CGO_CFLAGS="-target armv7a-linux-androideabi21"
+              export GOARCH=arm
+              export GOARM=7
+              export CC=$NDK/bin/armv7a-linux-androideabi21-clang
+              export CXX=$NDK/bin/armv7a-linux-androideabi21-clang++
+              OUT=libxivpn_armv7a.so
+              ;;
+          esac
+
+          echo "Building $arch -> $OUT"
+          go build -buildmode=pie -trimpath -o $OUT -ldflags="-s -w -buildid=" -buildvcs=false
+        done
 
     - name: Replace .so in .aar
       shell: bash
@@ -132,7 +168,7 @@ jobs:
         # remove original libgojni.so if present
         rm -f aar_tmp/jni/**/libgojni.so || true
 
-        # copy custom .so
+        # copy custom .so and rename
         cp out/arm64-v8a/libxivpn.so  aar_tmp/jni/arm64-v8a/libgojni.so
         cp out/armeabi-v7a/libxivpn.so aar_tmp/jni/armeabi-v7a/libgojni.so
         cp out/x86_64/libxivpn.so     aar_tmp/jni/x86_64/libgojni.so
