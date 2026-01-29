@@ -221,6 +221,10 @@ jobs:
         
 
 
+        # Use API 21 compiler (works on Android 5.0+)
+        export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+        export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+
 
         export CGO_CFLAGS="-O3 -flto=thin -fomit-frame-pointer -ffunction-sections -fdata-sections"
         export CGO_CXXFLAGS="-O3 -flto=thin -fomit-frame-pointer -ffunction-sections -fdata-sections"
