@@ -218,7 +218,7 @@ jobs:
         echo "Binding for Android..."
         # Export parallel compilation (uses all CPU cores for faster builds)
         export GOMAXPROCS=$(nproc)
-        
+        export CGO_ENABLED=1
 
 
         # Use API 21 compiler (works on Android 5.0+)
