@@ -151,7 +151,7 @@ jobs:
           esac
 
           echo "Building $arch -> $OUT"
-          go build -buildmode=pie -trimpath -o $OUT -ldflags="-s -w -buildid=" -buildvcs=false
+          go build -buildmode=pie -trimpath -o $OUT -ldflags="-s -w -buildid=" -buildvcs=false ./
         done
 
     - name: Replace .so in .aar
