@@ -106,11 +106,13 @@ jobs:
       uses: nttld/setup-ndk@v1
       id: setup-ndk
       with:
-        add-to-path: true
+        add-to-path: false
         ndk-version: r27
 
     - name: Build custom .so files
       shell: bash
+      env:
+          NDK: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64
       run: |
         # Export paths and environment
         echo $NDK 
