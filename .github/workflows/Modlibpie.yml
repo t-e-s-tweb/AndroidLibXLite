@@ -1,0 +1,216 @@
+name: Build modpie
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        required: false
+        type: string
+      merge_prs:
+        description: 'Comma-separated PR numbers to merge (e.g., "1,2,3" or "0" for none)'
+        required: false
+        default: ''
+      fetch_branches_from_other:
+        description: 'Enter "username/repo branch" to fetch & merge, or 0 for none'
+        required: false
+        default: '0'
+      merge_dns:
+        description: 'merge DNS commit (0 = none)'
+        required: false
+        default: '0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    # -------------------------------
+    # Checkout repository
+    # -------------------------------
+    - name: Checkout repository
+      uses: actions/checkout@v6.0.0
+
+    # -------------------------------
+    # Cache / install patched Go
+    # -------------------------------
+    - uses: actions/cache@v4
+      id: go-cache
+      with:
+        path: .go
+        key: patched-go-${{ hashFiles('go.mod') }}
+
+    - name: Install patched Go
+      if: steps.go-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -e
+        GO_VERSION=$(sed -n -E 's/^go ([0-9]+\.[0-9]+).*/\1/p' go.mod)
+        FULL_VERSION=$(curl -s https://go.dev/VERSION?m=text | grep "^go$GO_VERSION")
+        curl -L "https://go.dev/dl/${FULL_VERSION}.linux-amd64.tar.gz" -o go.tar.gz
+        tar -xzf go.tar.gz
+        mv go .go
+        curl -L https://raw.githubusercontent.com/Exclude0122/libxivpn/refs/heads/master/goruntime-boottime-over-monotonic.diff -o runtime.patch
+        patch -d .go -p1 < runtime.patch
+
+    - name: Activate patched Go
+      shell: bash
+      run: |
+        echo "$(pwd)/.go/bin" >> $GITHUB_PATH
+        go version
+
+    # -------------------------------
+    # Install gomobile
+    # -------------------------------
+    - name: Install gomobile
+      run: |
+        go install golang.org/x/mobile/cmd/gomobile@latest
+        echo "$HOME/go/bin" >> $GITHUB_PATH
+
+    - name: Verify
+      run: |
+        which go
+        which gomobile
+
+    # -------------------------------
+    # Android SDK / NDK
+    # -------------------------------
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3.2.0
+      with:
+        log-accepted-android-sdk-licenses: false
+        cmdline-tools-version: '12266719'
+        packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+
+    - name: Install NDK
+      run: |
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.2.13676358"
+        echo "NDK=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+
+    # -------------------------------
+    # Prepare xray-core
+    # -------------------------------
+    - name: Build xray-core
+      run: |
+        mkdir -p assets data
+        bash gen_assets.sh download
+        cp -v data/*.dat assets/
+
+        go env -w GOPRIVATE=github.com/xtls/xray-core
+        go env -w GONOSUMDB=github.com/xtls/xray-core
+
+        MODCACHE=$(go env GOMODCACHE)
+        MOD_PATH="$MODCACHE/github.com/xtls/xray-core"
+        rm -rf "$MOD_PATH"
+
+        XRAY_PATH="$GITHUB_WORKSPACE/_deps/xray-core"
+        rm -rf "$XRAY_PATH"
+
+        git clone https://github.com/xtls/xray-core.git "$XRAY_PATH"
+        cd "$XRAY_PATH"
+        git checkout main
+        git fetch origin main
+
+        LOCAL_SHA=$(git rev-parse HEAD)
+        REMOTE_SHA=$(git rev-parse origin/main)
+
+        if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
+          echo "✅ xray-core up-to-date"
+        else
+          echo "⚠️ xray-core not at latest origin/main"
+          git log --oneline --decorate --max-count=5 origin/main
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        # merge DNS commit if requested
+        if [ "${{ github.event.inputs.merge_dns }}" != "0" ]; then
+          DNS_MSG="refactor(dns): streamline query handling and remove redundant deadline logic"
+          git remote add j2rong4cn https://github.com/j2rong4cn/Xray-core.git
+          git fetch j2rong4cn main
+          DNS_HOST_SHA=$(git log j2rong4cn/main --grep="$DNS_MSG" --format="%H" -n 1)
+          if [ -n "$DNS_HOST_SHA" ]; then
+            git cherry-pick "$DNS_HOST_SHA" || true
+          fi
+        fi
+
+        # merge PRs if provided
+        IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
+        for PR_NUM in "${PR_LIST[@]}"; do
+          git fetch origin pull/$PR_NUM/head:pr-$PR_NUM
+          git merge -X theirs --no-edit pr-$PR_NUM || true
+        done
+
+        # merge external branches if provided
+        if [[ "${{ github.event.inputs.fetch_branches_from_other }}" != "0" ]]; then
+          IFS=',' read -ra EXT_LIST <<< "${{ github.event.inputs.fetch_branches_from_other }}"
+          for ITEM in "${EXT_LIST[@]}"; do
+            REPO=$(echo "$ITEM" | awk '{print $1}')
+            BRANCH=$(echo "$ITEM" | awk '{print $2}')
+            REMOTE_NAME="ext_$(echo "$REPO" | sed 's|/|_|g')"
+            git remote add "$REMOTE_NAME" "https://github.com/$REPO.git" || true
+            git fetch "$REMOTE_NAME" "$BRANCH"
+            git merge -X theirs --no-edit "$REMOTE_NAME/$BRANCH" || true
+          done
+        fi
+
+        cd ${{ github.workspace }}
+
+        # Replace go.mod
+        go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
+        go mod tidy
+        go mod download
+
+    # -------------------------------
+    # Build AAR skeleton
+    # -------------------------------
+    - name: Build AAR skeleton
+      run: |
+        gomobile init -v
+        gomobile bind -v -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags='-s -w -buildid=' ./
+
+    # -------------------------------
+    # Build custom PIE .so
+    # -------------------------------
+    - name: Build custom PIE .so
+      run: |
+        wget https://raw.githubusercontent.com/Exclude0122/libxivpn/refs/heads/master/build.sh
+        chmod +x build.sh
+        ./build.sh all patch
+
+        mkdir -p out/arm64-v8a out/armeabi-v7a out/x86_64
+
+        mv libxivpn_arm64.so  out/arm64-v8a/libgojni.so
+        mv libxivpn_armv7a.so out/armeabi-v7a/libgojni.so
+        mv libxivpn_x86_64.so out/x86_64/libgojni.so
+
+    # -------------------------------
+    # Replace .so inside AAR
+    # -------------------------------
+    - name: Replace .so in AAR
+      run: |
+        AAR=$(ls *.aar)
+        unzip "$AAR" -d aar_tmp
+        rm -f aar_tmp/jni/**/libgojni.so || true
+        cp out/arm64-v8a/libgojni.so  aar_tmp/jni/arm64-v8a/
+        cp out/armeabi-v7a/libgojni.so aar_tmp/jni/armeabi-v7a/
+        cp out/x86_64/libgojni.so     aar_tmp/jni/x86_64/
+        cd aar_tmp
+        zip -r ../"$AAR" .
+        cd ..
+        unzip -l "$AAR"
+
+    # -------------------------------
+    # Upload artifacts
+    # -------------------------------
+  
+
+    - name: Upload to release
+      if: github.event.inputs.release_tag != ''
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: "*.aar"
+        tag: ${{ github.event.inputs.release_tag }}
+        file_glob: true
+        overwrite: true
