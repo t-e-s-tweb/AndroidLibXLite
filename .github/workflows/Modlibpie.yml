@@ -1,4 +1,4 @@
-name: Build modpie
+name: Build mod
 
 on:
   workflow_dispatch:
@@ -7,9 +7,10 @@ on:
         required: false
         type: string
       merge_prs:
-        description: 'Comma-separated PR numbers to merge (e.g., "1,2,3" or "0" for none)'
+        description: 'Comma-separated PR numbers to merge (e.g., "1,2,3" or 0 for none)'
         required: false
         default: ''
+        type: string
       fetch_branches_from_other:
         description: 'Enter "username/repo branch" to fetch & merge, or 0 for none'
         required: false
@@ -22,18 +23,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
 
-    # -------------------------------
-    # Checkout repository
-    # -------------------------------
     - name: Checkout repository
       uses: actions/checkout@v6.0.0
 
-    # -------------------------------
-    # Cache / install patched Go
-    # -------------------------------
     - uses: actions/cache@v4
       id: go-cache
       with:
@@ -52,6 +46,7 @@ jobs:
         mv go .go
         curl -L https://raw.githubusercontent.com/Exclude0122/libxivpn/refs/heads/master/goruntime-boottime-over-monotonic.diff -o runtime.patch
         patch -d .go -p1 < runtime.patch
+        echo "$(pwd)/.go/bin" >> $GITHUB_PATH
 
     - name: Activate patched Go
       shell: bash
@@ -59,22 +54,16 @@ jobs:
         echo "$(pwd)/.go/bin" >> $GITHUB_PATH
         go version
 
-    # -------------------------------
-    # Install gomobile
-    # -------------------------------
     - name: Install gomobile
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
         echo "$HOME/go/bin" >> $GITHUB_PATH
 
-    - name: Verify
+    - name: Verify Go and gomobile
       run: |
         which go
         which gomobile
 
-    # -------------------------------
-    # Android SDK / NDK
-    # -------------------------------
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3.2.0
       with:
@@ -84,25 +73,20 @@ jobs:
 
     - name: Install NDK
       run: |
-        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.2.13676358"
-        echo "NDK=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;28.2.13676358"
+        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
 
-    # -------------------------------
-    # Prepare xray-core
-    # -------------------------------
-    - name: Build xray-core
+    - name: Prepare Xray-core and assets
       run: |
         mkdir -p assets data
         bash gen_assets.sh download
         cp -v data/*.dat assets/
-
         go env -w GOPRIVATE=github.com/xtls/xray-core
         go env -w GONOSUMDB=github.com/xtls/xray-core
 
         MODCACHE=$(go env GOMODCACHE)
         MOD_PATH="$MODCACHE/github.com/xtls/xray-core"
         rm -rf "$MOD_PATH"
-
         XRAY_PATH="$GITHUB_WORKSPACE/_deps/xray-core"
         rm -rf "$XRAY_PATH"
 
@@ -113,38 +97,30 @@ jobs:
 
         LOCAL_SHA=$(git rev-parse HEAD)
         REMOTE_SHA=$(git rev-parse origin/main)
-
-        if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
-          echo "✅ xray-core up-to-date"
-        else
-          echo "⚠️ xray-core not at latest origin/main"
+        if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
           git log --oneline --decorate --max-count=5 origin/main
         fi
 
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-        # merge DNS commit if requested
         if [ "${{ github.event.inputs.merge_dns }}" != "0" ]; then
           DNS_MSG="refactor(dns): streamline query handling and remove redundant deadline logic"
           git remote add j2rong4cn https://github.com/j2rong4cn/Xray-core.git
           git fetch j2rong4cn main
           DNS_HOST_SHA=$(git log j2rong4cn/main --grep="$DNS_MSG" --format="%H" -n 1)
-          if [ -n "$DNS_HOST_SHA" ]; then
-            git cherry-pick "$DNS_HOST_SHA" || true
-          fi
+          [ -n "$DNS_HOST_SHA" ] && git cherry-pick "$DNS_HOST_SHA" || echo "$DNS_MSG"
         fi
 
-        # merge PRs if provided
         IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
         for PR_NUM in "${PR_LIST[@]}"; do
           git fetch origin pull/$PR_NUM/head:pr-$PR_NUM
           git merge -X theirs --no-edit pr-$PR_NUM || true
         done
 
-        # merge external branches if provided
-        if [[ "${{ github.event.inputs.fetch_branches_from_other }}" != "0" ]]; then
-          IFS=',' read -ra EXT_LIST <<< "${{ github.event.inputs.fetch_branches_from_other }}"
+        BRANCH_INPUT="${{ github.event.inputs.fetch_branches_from_other }}"
+        if [[ "$BRANCH_INPUT" != "0" ]]; then
+          IFS=',' read -ra EXT_LIST <<< "$BRANCH_INPUT"
           for ITEM in "${EXT_LIST[@]}"; do
             REPO=$(echo "$ITEM" | awk '{print $1}')
             BRANCH=$(echo "$ITEM" | awk '{print $2}')
@@ -155,75 +131,75 @@ jobs:
           done
         fi
 
-        cd ${{ github.workspace }}
-
-        # Replace go.mod
+        cd ${{ github.workspace }}/
         go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
         go mod tidy
         go mod download
 
-    # -------------------------------
-    # Build AAR skeleton
-    # -------------------------------
-    - name: Build AAR skeleton
+    - name: Build AAR with gomobile
       run: |
         gomobile init -v
         gomobile bind -v -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags='-s -w -buildid=' ./
 
-    # -------------------------------
-    # Build custom PIE .so
-    # -------------------------------
-    - name: Build custom PIE .so
+    - name: Build manual PIE .so for each ABI
+      env:
+        NDK: ${{ env.ANDROID_NDK_HOME }}
       run: |
-        wget https://raw.githubusercontent.com/Exclude0122/libxivpn/refs/heads/master/build.sh
-        chmod +x build.sh
-        ./build.sh all patch
+        mkdir -p out/arm64-v8a out/armeabi-v7a out/x86_64
 
-    # -------------------------------
-    # Replace .so inside AAR
-    # -------------------------------
+        ARCHS=("arm64" "armv7a" "x86_64")
+        for arch in "${ARCHS[@]}"; do
+          case $arch in
+            arm64)
+              export GOARCH=arm64
+              export CC=$NDK/bin/aarch64-linux-android21-clang
+              OUT=out/arm64-v8a/libxivpn.so
+              ;;
+            armv7a)
+              export GOARCH=arm
+              export GOARM=7
+              export CC=$NDK/bin/armv7a-linux-androideabi21-clang
+              OUT=out/armeabi-v7a/libxivpn.so
+              ;;
+            x86_64)
+              export GOARCH=amd64
+              export CC=$NDK/bin/x86_64-linux-android21-clang
+              OUT=out/x86_64/libxivpn.so
+              ;;
+          esac
+
+          export GOOS=android
+          export CGO_ENABLED=1
+          go build -buildmode=pie -trimpath -o "$OUT" -ldflags="-s -w -buildid=" libv2ray_main.go
+        done
+
     - name: Replace .so in AAR
       run: |
-        # Unzip the original AAR
-          AAR=$(ls *.aar)
-          unzip "$AAR" -d aar_tmp
+        AAR=$(ls *.aar)
+        unzip "$AAR" -d aar_tmp
+        rm -f aar_tmp/jni/**/libgojni.so || true
+        cp out/arm64-v8a/libxivpn.so  aar_tmp/jni/arm64-v8a/libgojni.so
+        cp out/armeabi-v7a/libxivpn.so aar_tmp/jni/armeabi-v7a/libgojni.so
+        cp out/x86_64/libxivpn.so     aar_tmp/jni/x86_64/libgojni.so
 
-          # Remove old JNI ABIs
-          rm -rf aar_tmp/jni/arm64-v8a/*
-          rm -rf aar_tmp/jni/armeabi-v7a/*
-          rm -rf aar_tmp/jni/x86_64/*
-          rm -rf aar_tmp/jni/x86/*
+        cd aar_tmp
+        zip -r ../"$AAR" .
+        cd ..
+        unzip -l "$AAR"
 
-          # Create ABI folders
-          mkdir -p aar_tmp/jni/arm64-v8a
-          mkdir -p aar_tmp/jni/armeabi-v7a
-          mkdir -p aar_tmp/jni/x86_64
+    - name: Upload build artifacts
+      if: github.event.inputs.release_tag == ''
+      uses: actions/upload-artifact@v6.0.0
+      with:
+        name: libv2ray
+        path: |
+          ${{ github.workspace }}/libv2ray*r
 
-          # Copy manually built .so into folders first
-         cp out/arm64-v8a/libxivpn_arm64.so  aar_tmp/jni/arm64-v8a/libxivpn.so
-         cp out/armeabi-v7a/libxivpn_armv7a.so aar_tmp/jni/armeabi-v7a/libxivpn.so
-         cp out/x86_64/libxivpn_x86_64.so     aar_tmp/jni/x86_64/libxivpn.so
-
-          # Now rename to libgojni.so inside the AAR
-          mv aar_tmp/jni/arm64-v8a/libxivpn.so  aar_tmp/jni/arm64-v8a/libgojni.so
-          mv aar_tmp/jni/armeabi-v7a/libxivpn.so aar_tmp/jni/armeabi-v7a/libgojni.so
-          mv aar_tmp/jni/x86_64/libxivpn.so     aar_tmp/jni/x86_64/libgojni.so
-
-          # Repack the AAR cleanly
-          cd aar_tmp
-          zip -r -X ../"$AAR" .
-          cd ..
-
-    # -------------------------------
-    # Upload artifacts
-    # -------------------------------
-  
-
-    - name: Upload to release
+    - name: Upload AndroidLibXrayLite to release
       if: github.event.inputs.release_tag != ''
       uses: svenstaro/upload-release-action@v2
       with:
-        file: "*.aar"
+        file: ./libv2ray*r
         tag: ${{ github.event.inputs.release_tag }}
         file_glob: true
         overwrite: true
