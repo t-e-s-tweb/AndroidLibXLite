@@ -179,27 +179,40 @@ jobs:
         chmod +x build.sh
         ./build.sh all patch
 
-        mkdir -p out/arm64-v8a out/armeabi-v7a out/x86_64
-
-        mv libxivpn_arm64.so  out/arm64-v8a/libgojni.so
-        mv libxivpn_armv7a.so out/armeabi-v7a/libgojni.so
-        mv libxivpn_x86_64.so out/x86_64/libgojni.so
-
     # -------------------------------
     # Replace .so inside AAR
     # -------------------------------
     - name: Replace .so in AAR
       run: |
-        AAR=$(ls *.aar)
-        unzip "$AAR" -d aar_tmp
-        rm -f aar_tmp/jni/**/libgojni.so || true
-        cp out/arm64-v8a/libgojni.so  aar_tmp/jni/arm64-v8a/
-        cp out/armeabi-v7a/libgojni.so aar_tmp/jni/armeabi-v7a/
-        cp out/x86_64/libgojni.so     aar_tmp/jni/x86_64/
-        cd aar_tmp
-        zip -r ../"$AAR" .
-        cd ..
-        unzip -l "$AAR"
+        # Unzip the original AAR
+          AAR=$(ls *.aar)
+          unzip "$AAR" -d aar_tmp
+
+          # Remove old JNI ABIs
+          rm -rf aar_tmp/jni/arm64-v8a/*
+          rm -rf aar_tmp/jni/armeabi-v7a/*
+          rm -rf aar_tmp/jni/x86_64/*
+          rm -rf aar_tmp/jni/x86/*
+
+          # Create ABI folders
+          mkdir -p aar_tmp/jni/arm64-v8a
+          mkdir -p aar_tmp/jni/armeabi-v7a
+          mkdir -p aar_tmp/jni/x86_64
+
+          # Copy manually built .so into folders first
+         cp out/arm64-v8a/libxivpn_arm64.so  aar_tmp/jni/arm64-v8a/libxivpn.so
+         cp out/armeabi-v7a/libxivpn_armv7a.so aar_tmp/jni/armeabi-v7a/libxivpn.so
+         cp out/x86_64/libxivpn_x86_64.so     aar_tmp/jni/x86_64/libxivpn.so
+
+          # Now rename to libgojni.so inside the AAR
+          mv aar_tmp/jni/arm64-v8a/libxivpn.so  aar_tmp/jni/arm64-v8a/libgojni.so
+          mv aar_tmp/jni/armeabi-v7a/libxivpn.so aar_tmp/jni/armeabi-v7a/libgojni.so
+          mv aar_tmp/jni/x86_64/libxivpn.so     aar_tmp/jni/x86_64/libgojni.so
+
+          # Repack the AAR cleanly
+          cd aar_tmp
+          zip -r -X ../"$AAR" .
+          cd ..
 
     # -------------------------------
     # Upload artifacts
