@@ -224,7 +224,7 @@ jobs:
         -androidapi 24 \
         -trimpath \
         -gcflags="all=-l=4" \
-        -ldflags="-s -w -buildid='' -linkmode=external -extldflags '-fuse-ld=lld -Wl,--gc-sections -Wl,--build-id=none'" \
+        -ldflags="-s -w -buildid='' -linkmode=external -extldflags '-fuse-ld=lld -Wl,--gc-sections -Wl,--build-id=none -Wl,--strip-all'" \
         ./
 
 
