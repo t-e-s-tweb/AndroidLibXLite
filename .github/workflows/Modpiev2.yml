@@ -218,7 +218,7 @@ jobs:
         # Export parallel compilation (uses all CPU cores for faster builds)
         export GOMAXPROCS=$(nproc)
         export CGO_ENABLED=1
-        export GOEXPERIMENT="arenas,cgocheck2,greenteagc,jsonv2,newinliner,regabi,swissmap,heapminimum512kib"
+        export GOEXPERIMENT="arenas,greenteagc,jsonv2,newinliner,regabi,swissmap,heapminimum512kib"
         echo "Initializing gomobile..."
         gomobile init -v
         go mod tidy
