@@ -211,15 +211,17 @@ jobs:
         go mod download
        
 
-        echo "Initializing gomobile..."
-        gomobile init -v
-        go mod tidy
+        
+        
         
         echo "Binding for Android..."
         # Export parallel compilation (uses all CPU cores for faster builds)
         export GOMAXPROCS=$(nproc)
         export CGO_ENABLED=1
-        export GOEXPERIMENT="greenteagc,jsonv2,newinliner"
+        export GOEXPERIMENT="greenteagc,jsonv2,newinliner,regabi,swissmap,heapminimum512kib"
+        echo "Initializing gomobile..."
+        gomobile init -v
+        go mod tidy
 
 
         # Use API 21 compiler (works on Android 5.0+)
