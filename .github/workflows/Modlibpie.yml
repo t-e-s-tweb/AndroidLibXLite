@@ -231,7 +231,7 @@ jobs:
 
         export CGO_CFLAGS="-O3 -flto=thin -fomit-frame-pointer -ffunction-sections -fdata-sections"
         export CGO_CXXFLAGS="-O3 -flto=thin -fomit-frame-pointer -ffunction-sections -fdata-sections"
-        export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld"
+        export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld -Wl,-z,max-page-size=16384"
 
         gomobile bind \
         -v \
