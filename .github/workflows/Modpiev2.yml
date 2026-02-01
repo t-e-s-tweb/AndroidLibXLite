@@ -238,7 +238,10 @@ jobs:
         -androidapi 24 \
         -trimpath \
         -gcflags="all=-l=4" \
-        -ldflags="-s -w -buildid='' -linkmode=external -extldflags '-fuse-ld=lld -flto=thin -O2 -Wl,-O2 -Wl,--lto-O2 -Wl,-z,max-page-size=16384'" \
+        -ldflags="-s -w -buildid='' \
+        -X internal/godebug.defaultGODEBUG=multipathtcp=0 \
+        -checklinkname=0 \
+        -linkmode=external -extldflags '-fuse-ld=lld -flto=thin -O2 -Wl,-O2 -Wl,--lto-O2 -Wl,-z,max-page-size=16384'" \
         ./
 
     - name: Strip native libraries in AAR
