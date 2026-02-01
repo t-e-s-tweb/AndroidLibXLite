@@ -33,7 +33,11 @@ jobs:
     - uses: actions/cache@v4
       id: go-cache
       with:
-       path: .go
+       path: |
+        .go
+         ~/.cache/go-build
+         ~/go/pkg/mod
+         ~/go/pkg/gomobile
        key: patched-go-${{ hashFiles('go.mod') }}
 
     - name: Install patched Go
