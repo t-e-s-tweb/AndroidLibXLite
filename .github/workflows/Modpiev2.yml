@@ -236,7 +236,7 @@ jobs:
         export CGO_CFLAGS="-O2 -flto=thin -fomit-frame-pointer -fno-semantic-interposition -falign-functions=32"
         export CGO_CXXFLAGS="-O2 -flto=thin -fomit-frame-pointer -fno-semantic-interposition -falign-functions=32"
         export CGO_LDFLAGS="-O2 -flto=thin -fuse-ld=lld -Wl,-O2 -Wl,--lto-O2 -Wl,-z,max-page-size=16384"
-        export GOFLAGS="-a"
+        #export GOFLAGS="-a"
         gomobile bind \
         -v \
         -androidapi 24 \
