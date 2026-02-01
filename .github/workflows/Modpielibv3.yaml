@@ -66,7 +66,7 @@ jobs:
 
        # Apply patches
        echo "Applying Go patch 1230..."
-       curl -L "$GO_PATCH_1230" | patch -d .go -p1 --forward
+       #curl -L "$GO_PATCH_1230" | patch -d .go -p1 --forward
 
        echo "Applying Go patch 1234..."
        curl -L "$GO_PATCH_1234" | patch -d .go -p1 --forward
