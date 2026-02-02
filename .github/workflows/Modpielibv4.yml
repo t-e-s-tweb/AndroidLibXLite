@@ -209,40 +209,7 @@ jobs:
         #export GOFLAGS="-a"
 
         gomobile bind -v -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -buildid=''" ./
-    - name: Verify 16KB page alignment compatibility
-      run: |
-        # Extract AAR and check native libraries for 16KB alignment
-        unzip -q libv2ray.aar
-        echo "Checking 16KB page alignment for Android 15+ compatibility..."
-        
-        # Check all native libraries
-        for arch in arm64-v8a armeabi-v7a x86 x86_64; do
-          if [ -f "jni/$arch/libgojni.so" ]; then
-            echo "Checking $arch architecture..."
-            
-            # Use readelf to check segment alignment (if available)
-            if command -v readelf >/dev/null 2>&1; then
-              echo "Segment alignment for $arch:"
-              readelf -l "jni/$arch/libgojni.so" | grep -E "(LOAD|Align)" || true
-            else
-              echo "readelf not available, skipping detailed check for $arch"
-            fi
-            
-            # Check file size alignment
-            size=$(stat -c%s "jni/$arch/libgojni.so" 2>/dev/null || stat -f%z "jni/$arch/libgojni.so" 2>/dev/null || echo "0")
-            remainder=$((size % 16384))
-            if [ $remainder -eq 0 ]; then
-              echo "✅ $arch: File size aligned to 16KB boundary"
-            else
-              echo "⚠️  $arch: File size not aligned to 16KB boundary (remainder: $remainder bytes)"
-            fi
-          fi
-        done
-        
-        # Clean up extracted files
-        rm -rf META-INF jni classes.jar AndroidManifest.xml R.txt res proguard.txt 2>/dev/null || true
-        
-
+  
 
     - name: Strip native libraries in AAR
       run: |
