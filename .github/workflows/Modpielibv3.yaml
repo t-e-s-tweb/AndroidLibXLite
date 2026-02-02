@@ -249,9 +249,10 @@ jobs:
         export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
 
 
-        export CGO_CFLAGS="-O2 -flto=thin -fomit-frame-pointer -fno-semantic-interposition -falign-functions=32"
-        export CGO_CXXFLAGS="-O2 -flto=thin -fomit-frame-pointer -fno-semantic-interposition -falign-functions=32"
-        export CGO_LDFLAGS="-O2 -flto=thin -fuse-ld=lld -Wl,-O2 -Wl,--lto-O2 -Wl,-z,max-page-size=16384"
+        export CGO_CFLAGS="-O3 -flto=thin -fomit-frame-pointer -fno-semantic-interposition -falign-functions=32"
+        export CGO_CXXFLAGS="-O3 -flto=thin -fomit-frame-pointer -fno-semantic-interposition -falign-functions=32"
+        #export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld -Wl,-O3 -Wl,--lto-O3 -Wl,--gc-sections -Wl,--icf=all -Wl,--strip-all -WL, -z,max-page-size=16384"
+        export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld -Wl,-O3,--lto-O3,--gc-sections,--icf=all,--strip-all,-z,max-page-size=16384"
         #export GOFLAGS="-a"
         gomobile bind \
         -v \
@@ -261,7 +262,7 @@ jobs:
         -ldflags="-s -w -buildid='' \
         -X internal/godebug.defaultGODEBUG=multipathtcp=0 \
         -checklinkname=0 \
-        -linkmode=external -extldflags '-fuse-ld=lld -flto=thin -O2 -Wl,-O2 -Wl,--lto-O2 -Wl,-z,max-page-size=16384'" \
+        -linkmode=external -extldflags '-fuse-ld=lld -flto=thin -O3 -Wl,-O3,--lto-O3,--gc-sections,--icf=all,--strip-all,-z,max-page-size=16384'" \
         ./
 
     - name: Strip native libraries in AAR
