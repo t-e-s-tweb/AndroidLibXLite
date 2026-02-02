@@ -55,7 +55,7 @@ jobs:
        echo "Resolved full version: $FULL_VERSION"
 
        # Download and extract Go locally
-       curl -L "https://go.dev/dl/${FULL_VERSION}.linux-amd64.tar.gz" -o go.tar.gz
+       curl -L "https://go.dev/dl/go1.26rc2.linux-amd64.tar.gz" -o go.tar.gz
        tar -xzf go.tar.gz
        mv go .go
 
@@ -72,14 +72,14 @@ jobs:
        #curl -L "$GO_PATCH_1234" | patch -d .go -p1 --forward
 
        echo "Applying runtime patch..."
-       curl -L "$RUNTIME_PATCH" -o runtime.patch
-       patch -d .go -p1 --forward < runtime.patch
+       #curl -L "$RUNTIME_PATCH" -o runtime.patch
+       #patch -d .go -p1 --forward < runtime.patch
 
        # Rebuild Go toolchain (required for runtime patches)
-       echo "Rebuilding Go toolchain..."
-       cd .go/src
-       ./make.bash
-       cd ../..
+       #echo "Rebuilding Go toolchain..."
+       #cd .go/src
+       #./make.bash
+       #cd ../..
 
        echo "Patched Go is ready."    
 
@@ -238,7 +238,7 @@ jobs:
         # Export parallel compilation (uses all CPU cores for faster builds)
         export GOMAXPROCS=$(nproc)
         export CGO_ENABLED=1
-        export GOEXPERIMENT="synchashtriemap,arenas,greenteagc,jsonv2,newinliner,regabi,swissmap,heapminimum512kib"
+        export GOEXPERIMENT="runtimefreegc,sizespecializedmalloc,synchashtriemap,arenas,greenteagc,jsonv2,newinliner,regabi,swissmap,heapminimum512kib"
         echo "Initializing gomobile..."
         gomobile init -v
         go mod tidy
@@ -260,7 +260,6 @@ jobs:
         -trimpath \
         -gcflags="all=-l=4" \
         -ldflags="-s -w -buildid='' \
-        -X internal/godebug.defaultGODEBUG=multipathtcp=0 \
         -checklinkname=0 \
         -linkmode=external -extldflags '-fuse-ld=lld -flto=thin -O3 -Wl,-O3,--lto-O3,--gc-sections,--icf=all,--strip-all,-z,max-page-size=16384'" \
         ./
