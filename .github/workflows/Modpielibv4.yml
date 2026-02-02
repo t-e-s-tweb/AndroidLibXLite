@@ -26,7 +26,7 @@ env:
  
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
 
     - name: Checkout repository
@@ -48,9 +48,9 @@ jobs:
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
     - name: Set up Android NDK
-      uses: nttld/setup-ndk@v1
+      uses: Ylarod/setup-ndk-clang@v1
       with:
-        ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+       ndk-version: r29
 
 
     - name: Verify 
