@@ -30,64 +30,17 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6.0.0
       
-    - uses: actions/cache@v4
-      id: go-cache
+
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
       with:
-       path: |
-        .go
-         ~/.cache/go-build
-         ~/go/pkg/mod
-         ~/go/pkg/gomobile
-       key: patched-go-${{ hashFiles('go.mod') }}
+          go-version: '1.26.0-rc.2'
+          check-latest: true
 
-    - name: Install patched Go
-      if: steps.go-cache.outputs.cache-hit != 'true'
-      shell: bash
-      run: |
-       set -e
-
-       # Extract Go version from go.mod
-       GO_VERSION=$(sed -n -E 's/^go ([0-9]+\.[0-9]+).*/\1/p' go.mod)
-       echo "Go version from go.mod: $GO_VERSION"
-
-        # Get latest full version (e.g., go1.24.2)
-       FULL_VERSION=$(curl -s https://go.dev/VERSION?m=text | grep "^go$GO_VERSION")
-       echo "Resolved full version: $FULL_VERSION"
-
-       # Download and extract Go locally
-       curl -L "https://go.dev/dl/go1.26rc2.linux-amd64.tar.gz" -o go.tar.gz
-       tar -xzf go.tar.gz
-       mv go .go
-
-       # Define patches
-       GO_PATCH_1230="https://github.com/golang/go/commit/76a8409eb81eda553363783dcdd9d6224368ae0e.patch"
-       GO_PATCH_1234="https://github.com/golang/go/commit/59b7d40774b29bd1da1aa624f13233111aff4ad2.patch"
-       RUNTIME_PATCH="https://raw.githubusercontent.com/Exclude0122/libxivpn/refs/heads/master/goruntime-boottime-over-monotonic.diff"
-
-       # Apply patches
-       echo "Applying Go patch 1230..."
-       #curl -L "$GO_PATCH_1230" | patch -d .go -p1 --forward
-
-       echo "Applying Go patch 1234..."
-       #curl -L "$GO_PATCH_1234" | patch -d .go -p1 --forward
-
-       echo "Applying runtime patch..."
-       #curl -L "$RUNTIME_PATCH" -o runtime.patch
-       #patch -d .go -p1 --forward < runtime.patch
-
-       # Rebuild Go toolchain (required for runtime patches)
-       #echo "Rebuilding Go toolchain..."
-       #cd .go/src
-       #./make.bash
-       #cd ../..
-
-       echo "Patched Go is ready."    
-
-       echo "$(pwd)/.go/bin" >> $GITHUB_PATH
     - name: Activate patched Go
       shell: bash
       run: |
-       echo "$(pwd)/.go/bin" >> $GITHUB_PATH
        go version
     - name: Install gomobile
       run: |
