@@ -20,6 +20,8 @@ on:
         description: 'merge DNS commit (0 = none)'
         required: false
         default: '0'
+env:
+  ANDROID_NDK_VERSION: r26d  # Updated to support 16KB page alignment
         
  
 jobs:
@@ -45,7 +47,11 @@ jobs:
     - name: Install gomobile
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
-        echo "$HOME/go/bin" >> $GITHUB_PATH
+    - name: Set up Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+
 
     - name: Verify 
       run: |
@@ -59,12 +65,7 @@ jobs:
         cmdline-tools-version: '12266719'
         packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
 
-    - name: Install NDK
-      run: |
-        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-          --channel=0 \
-          --install "ndk;28.2.13676358"
-        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
+    
 
     - name: Build
       run: |
@@ -198,8 +199,7 @@ jobs:
 
 
         # Use API 21 compiler (works on Android 5.0+)
-        export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
-        export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+        export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
 
 
         export CGO_CFLAGS="-O2 -g"
