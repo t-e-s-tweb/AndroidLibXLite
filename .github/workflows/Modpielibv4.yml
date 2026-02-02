@@ -182,8 +182,7 @@ jobs:
         
         go mod tidy
         go mod download
-        go get -d golang.org/x/mobile/cmd/gomobile
-        go get -d google.golang.org/genproto
+        
 
         
         
