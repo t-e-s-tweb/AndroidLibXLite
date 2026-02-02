@@ -212,7 +212,7 @@ jobs:
     - name: Verify 16KB page alignment compatibility
       run: |
         # Extract AAR and check native libraries for 16KB alignment
-        unzip -q libXray.aar
+        unzip -q libv2ray.aar
         echo "Checking 16KB page alignment for Android 15+ compatibility..."
         
         # Check all native libraries
