@@ -212,7 +212,7 @@ jobs:
         -androidapi 24 \
         -trimpath \
         -gcflags="all=-l=4" \
-        -ldflags="-s -w -buildid='' \
+        -ldflags="-s -w -buildid="" \
         ./
 
     - name: Strip native libraries in AAR
