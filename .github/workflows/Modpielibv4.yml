@@ -36,18 +36,7 @@ jobs:
       uses: pierotofy/set-swap-space@master
       with:
           swap-size-gb: 10
-    - name: zram
-      run: |
-        sudo apt install -y zram-tools
-        sudo cat > /etc/default/zramswap <<EOF
-          ALGO=ztsd
-          PERCENT=40
-          PRIORITY=100
-        EOF
-          
-        sudo systemctl enable zramswap
-        sudo systemctl restart zramswap || sudo systemctl restart zramswap.service
-        sudo swapon --show
+    
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
