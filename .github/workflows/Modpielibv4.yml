@@ -32,7 +32,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6.0.0
       
-
+    - name : zram
+      run: |
+        wget https://raw.githubusercontent.com/andry-pebrianto/debian-zram-swap-optimizer/refs/heads/main/.env
+        wget https://raw.githubusercontent.com/andry-pebrianto/debian-zram-swap-optimizer/refs/heads/main/setup-zram-swap.sh
+        bash setup-zram*
 
     - name: Set up Go
       uses: actions/setup-go@v6
