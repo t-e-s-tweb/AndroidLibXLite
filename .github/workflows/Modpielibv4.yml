@@ -36,7 +36,7 @@ jobs:
       run: |
         wget https://raw.githubusercontent.com/andry-pebrianto/debian-zram-swap-optimizer/refs/heads/main/.env
         wget https://raw.githubusercontent.com/andry-pebrianto/debian-zram-swap-optimizer/refs/heads/main/setup-zram-swap.sh
-        bash setup-zram*
+        sudo bash setup-zram*
 
     - name: Set up Go
       uses: actions/setup-go@v6
