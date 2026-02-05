@@ -2,10 +2,7 @@ name: Change Visibility
 
 on:
   workflow_dispatch:
-    inputs:
-      release_tag:
-        required: false
-        type: string
+  
     
         
  
