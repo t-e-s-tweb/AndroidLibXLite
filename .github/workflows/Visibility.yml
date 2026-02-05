@@ -1,10 +1,14 @@
 name: Change Visibility
-
 on:
   workflow_dispatch:
-  
-    
-        
+   inputs:
+     token:
+      description: "A GitHub personal access token with read and write access to the repository's administration"
+      required: true
+     visibility:
+       description: "Either 'public' or 'private' depending on if you want to make the repository public or private respectively."
+       required: true
+
  
 jobs:
   build:
