@@ -1,15 +1,23 @@
-name: Public Test
-description: A test that the action makes the repo public
+name: Change Repository Visibility
 
 on:
   workflow_dispatch:
+    inputs:
+      visibility:
+        description: 'Set visibility to public or private'
+        required: true
+        default: 'private'
+        type: choice
+        options:
+          - public
+          - private
 
 jobs:
-  run-my-action:
-    runs-on: ubuntu-slim
+  change-visibility:
+    runs-on: ubuntu-latest
     steps:
-      - name: Make the repo public
-        uses: justinbird/github-visibility-action@main
+      - name: Change Visibility
+        uses: JustinBird/github-visibility-action@v1
         with:
-          token: '${{ secrets.PRIVACY_TOKEN }}'
-          visibility: 'public'
+          visibility: ${{ github.event.inputs.visibility }}
+          token: ${{ secrets.ADMINISTRATION_TOKEN }}
