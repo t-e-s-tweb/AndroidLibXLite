@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-slim
     steps:
       - name: Change Visibility
-        uses: JustinBird/github-visibility-action@v1
+        uses: JustinBird/github-visibility-action@main
         with:
           visibility: ${{ github.event.inputs.visibility }}
           token: ${{ secrets.ADMINISTRATION_TOKEN }}
