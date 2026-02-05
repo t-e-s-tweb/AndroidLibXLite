@@ -48,10 +48,19 @@ jobs:
     - name: Install gomobile
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
-    - name: Set up Android NDK
-      uses: Ylarod/setup-ndk-clang@v1
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3.2.0
       with:
-       ndk-version: r29
+        log-accepted-android-sdk-licenses: false
+        cmdline-tools-version: '12266719'
+        packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+
+    - name: Install NDK
+      run: |
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+          --channel=0 \
+          --install "ndk;28.2.13676358"
+        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
 
 
     - name: Verify 
@@ -191,11 +200,12 @@ jobs:
 
 
        
-
+        export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+        export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
         export CGO_CFLAGS="-O2 -fvisibility=hidden -ffunction-sections -fdata-sections -fno-stack-protector -fmerge-all-constants"
         export CGO_CXXFLAGS="-O2 -fvisibility=hidden -ffunction-sections -fdata-sections -fno-stack-protector -fmerge-all-constants"
         #export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld -Wl,-O3 -Wl,--lto-O3 -Wl,--gc-sections -Wl,--icf=all -Wl,--strip-all -Wl,-z,max-page-size=16384"
-        export CGO_LDFLAGS="-Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections"
+        export CGO_LDFLAGS="-fuse-ld=lld -Wl,-z,separate-loadable-segments -Wl,-z,common-page-size=0x4000 -Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections"
         #export GOFLAGS="-a"
 
         gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -buildid='' -linkmode external -extldflags=$CGO_LDFLAGS" ./
