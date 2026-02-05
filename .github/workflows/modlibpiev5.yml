@@ -190,9 +190,7 @@ jobs:
         go mod tidy
 
 
-        # Use API 21 compiler (works on Android 5.0+)
-        export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-
+       
 
         export CGO_CFLAGS="-O2 -fvisibility=hidden -ffunction-sections -fdata-sections -fno-stack-protector -fmerge-all-constants"
         export CGO_CXXFLAGS="-O2 -fvisibility=hidden -ffunction-sections -fdata-sections -fno-stack-protector -fmerge-all-constants"
