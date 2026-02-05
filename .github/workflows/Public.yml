@@ -11,5 +11,5 @@ jobs:
       - name: Make the repo public
         uses: justinbird/github-visibility-action@main
         with:
-          token: '${{ secrets.ADMINISTRATION_TOKEN }}'
+          token: '${{ secrets.PRIVACY_TOKEN }}'
           visibility: 'public'
