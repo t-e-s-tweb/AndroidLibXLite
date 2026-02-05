@@ -1,0 +1,17 @@
+name: Private Test
+description: A test that the action makes the repo private
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-my-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Make the repo private
+        uses: justinbird/github-visibility-action@main
+        with:
+          token: '${{ secrets.ADMINISTRATION_TOKEN }}'
+          visibility: 'private'
