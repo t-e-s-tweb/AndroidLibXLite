@@ -195,7 +195,7 @@ jobs:
         export CGO_CFLAGS="-O2 -fvisibility=hidden -ffunction-sections -fdata-sections -fno-stack-protector -fmerge-all-constants"
         export CGO_CXXFLAGS="-O2 -fvisibility=hidden -ffunction-sections -fdata-sections -fno-stack-protector -fmerge-all-constants"
         #export CGO_LDFLAGS="-O3 -flto=thin -fuse-ld=lld -Wl,-O3 -Wl,--lto-O3 -Wl,--gc-sections -Wl,--icf=all -Wl,--strip-all -Wl,-z,max-page-size=16384"
-        export CGO_LDFLAGS="-Wl,-z,max-page-size=0x4000 -Wl,-z,now -static-libgcc -Wl,--strip-all -Wl,--gc-sections"
+        export CGO_LDFLAGS="-Wl,-z,max-page-size=0x4000 -static-libgcc -Wl,--strip-all -Wl,--gc-sections"
         #export GOFLAGS="-a"
 
         gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -buildid='' -linkmode external -extldflags=$CGO_LDFLAGS" ./
