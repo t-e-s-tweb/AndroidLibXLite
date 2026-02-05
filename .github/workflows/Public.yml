@@ -14,7 +14,7 @@ on:
 
 jobs:
   change-visibility:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Change Visibility
         uses: JustinBird/github-visibility-action@v1
