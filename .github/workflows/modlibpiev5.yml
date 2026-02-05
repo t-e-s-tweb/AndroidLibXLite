@@ -213,7 +213,7 @@ jobs:
         #gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" \
         #-ldflags="-s -w -buildid='' -linkmode external -extldflags='-Wl,-z,now -Wl,-z,separate-loadable-segments -Wl,-z,common-page-size=0x4000 -Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections'" \
         #./
-        gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" \
+        gomobile bind -androidapi 24 -trimpath -gcflags="all=-l=4" \
         -ldflags="-s -w -buildid='' -linkmode external -extldflags=-Wl,-z,now,-Wl,-z,separate-loadable-segments,-Wl,-z,common-page-size=0x4000,-Wl,-z,max-page-size=0x4000,-Wl,--strip-all,-Wl,--gc-sections" \
         ./
 
