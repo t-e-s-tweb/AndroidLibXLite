@@ -182,6 +182,7 @@ jobs:
         # Update all other dependencies
         
         
+        go get golang.org/x/mobile@latest
         go mod tidy
         go mod download
         
