@@ -204,9 +204,9 @@ jobs:
        
         export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
         export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
-        export CGO_CFLAGS="-O2 -march=armv8-a+crc+crypto -mtune=cortex-a76 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -flto -funroll-loops -fvectorize -fslp-vectorize -fstrict-aliasing -ftree-vectorize -Wno-unused-command-line-argument -DNDEBUG -mbranch-protection=standard"
-        export CGO_CXXFLAGS="-O2 -march=armv8-a+crc+crypto -mtune=cortex-a76 -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -flto -funroll-loops -fvectorize -fslp-vectorize -fstrict-aliasing -ftree-vectorize -Wno-unused-command-line-argument -DNDEBUG -mbranch-protection=standard"
-        export CGO_LDFLAGS="-flto -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,--gc-sections -Wl,--as-needed -Wl,--icf=safe -Wl,-O2 -Wl,--hash-style=gnu -Wl,--strip-all"
+        export CGO_CFLAGS="-O2 -march=armv8-a -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -funroll-loops -Wno-unused-command-line-argument -DNDEBUG"
+        export CGO_CXXFLAGS="-O2 -march=armv8-a -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -funroll-loops -Wno-unused-command-line-argument -DNDEBUG"
+        export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,--as-needed -Wl,--icf=safe -Wl,-O2 -Wl,--hash-style=gnu"
         
         echo "=== BUILD ENV ==="
         echo "GOOS=$GOOS"
