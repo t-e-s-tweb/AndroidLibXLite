@@ -706,9 +706,9 @@ jobs:
         echo "CGO_CFLAGS=$CGO_CFLAGS"
         echo "CGO_LDFLAGS=$CGO_LDFLAGS"
         echo "=================="
-        
+        export GOOS=android 
+        export GOARCH=arm64
         gomobile bind -v -x -androidapi 24 -trimpath \
-          - target=android/arm64 \
           -gcflags="all=-l=4" \
           -ldflags="-s -w -linkmode=external" \
           ./
