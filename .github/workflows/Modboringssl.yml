@@ -23,8 +23,115 @@ on:
         
  
 jobs:
-  build:
+  build-boringssl:
+    name: Build BoringSSL
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+        include:
+          - abi: arm64-v8a
+            toolchain: aarch64-linux-android24
+            cmake_arch: arm64-v8a
+          - abi: armeabi-v7a
+            toolchain: armv7a-linux-androideabi24
+            cmake_arch: armeabi-v7a
+          - abi: x86_64
+            toolchain: x86_64-linux-android24
+            cmake_arch: x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.0
+        with:
+          submodules: false
+
+      - name: Setup NDK
+        run: |
+          wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
+          unzip -q android-ndk.zip
+          rm android-ndk.zip
+          NDK_HOME=$(realpath android-ndk-r28c)
+          echo "NDK_HOME=$NDK_HOME" >> $GITHUB_ENV
+          echo "NDK_HOME=$NDK_HOME" >> $GITHUB_OUTPUT
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake
+
+      - name: Download xray-patches
+        run: |
+          echo "📥 Downloading xray-patches for BoringSSL integration..."
+          mkdir -p xray-patches
+          
+          # Use GitHub API to list files in the directory
+          PATCHES=$(curl -s "https://api.github.com/repos/halibiram/SimpleXray/contents/xray-patches" | grep -o '"name": "[^"]*\.patch"' | cut -d'"' -f4)
+          
+          for patch in $PATCHES; do
+            echo "Downloading: $patch"
+            curl -sL "https://raw.githubusercontent.com/halibiram/SimpleXray/main/xray-patches/$patch" -o "xray-patches/$patch"
+          done
+          
+          echo "📂 Available patches:"
+          ls -la xray-patches/
+
+      - name: Build BoringSSL
+        run: |
+          echo "🔧 Building BoringSSL for ${{ matrix.abi }}..."
+          
+          # Clone BoringSSL (shallow clone for speed)
+          git clone --depth=1 https://github.com/google/boringssl.git
+          cd boringssl
+          
+          BORINGSSL_DIR=$(pwd)
+          BUILD_DIR="build_${{ matrix.abi }}"
+          mkdir -p "$BUILD_DIR"
+          cd "$BUILD_DIR"
+          
+          # Configure with CMake
+          cmake .. \
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DCMAKE_SYSTEM_VERSION=24 \
+            -DANDROID_ABI=${{ matrix.cmake_arch }} \
+            -DCMAKE_ANDROID_ARCH_ABI=${{ matrix.cmake_arch }} \
+            -DCMAKE_ANDROID_NDK=$NDK_HOME \
+            -DCMAKE_TOOLCHAIN_FILE=$NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOPENSSL_SMALL=1 \
+            -DOPENSSL_NO_DEPRECATED=1 \
+            -DBUILD_SHARED_LIBS=OFF \
+            -GNinja
+          
+          # Build
+          ninja -j$(nproc)
+          
+          # Verify build
+          if [ ! -f "crypto/libcrypto.a" ] || [ ! -f "ssl/libssl.a" ]; then
+            echo "❌ BoringSSL build failed for ${{ matrix.abi }}"
+            exit 1
+          fi
+          
+          echo "✅ BoringSSL built for ${{ matrix.abi }}"
+          ls -lh crypto/libcrypto.a ssl/libssl.a
+          
+          # Save paths for next job
+          echo "BORINGSSL_DIR=$BORINGSSL_DIR" >> $GITHUB_ENV
+
+      - name: Upload BoringSSL Artifacts
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: boringssl-${{ matrix.abi }}
+          path: |
+            boringssl/build_${{ matrix.abi }}/crypto/libcrypto.a
+            boringssl/build_${{ matrix.abi }}/ssl/libssl.a
+            boringssl/include
+          retention-days: 1
+
+  build:
+    name: Build Xray with Gomobile
+    runs-on: ubuntu-latest
+    needs: build-boringssl
     steps:
 
     - name: Checkout repository
@@ -45,9 +152,11 @@ jobs:
       shell: bash
       run: |
        go version
+       
     - name: Install gomobile
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
+        
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3.2.0
       with:
@@ -62,107 +171,26 @@ jobs:
           --install "ndk;28.2.13676358"
         echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
 
+    - name: Download BoringSSL Artifacts
+      uses: actions/download-artifact@v6.0.0
+      with:
+        path: boringssl-artifacts
+        pattern: boringssl-*
 
-    - name: Verify 
+    - name: Verify BoringSSL Artifacts
       run: |
-         which go
-         which gomobile
-
-    - name: Download xray-patches for BoringSSL
-      run: |
-        echo "📥 Downloading xray-patches for BoringSSL integration..."
-        mkdir -p xray-patches
+        echo "🔍 Verifying downloaded BoringSSL artifacts..."
+        ls -la boringssl-artifacts/
         
-        # Use GitHub API to list files in the directory
-        echo "Fetching patch list from GitHub..."
-        PATCHES=$(curl -s "https://api.github.com/repos/halibiram/SimpleXray/contents/xray-patches" | grep -o '"name": "[^"]*\.patch"' | cut -d'"' -f4)
-        
-        if [ -z "$PATCHES" ]; then
-          echo "⚠️ No patches found via API, trying alternative method..."
-          # Fallback: try to download known patches or use raw URLs directly
-          for file in boringssl.patch tls.patch crypto.patch; do
-            curl -sL "https://raw.githubusercontent.com/halibiram/SimpleXray/main/xray-patches/$file" -o "xray-patches/$file" && echo "Downloaded: $file" || true
-          done
-        else
-          for patch in $PATCHES; do
-            echo "Downloading: $patch"
-            curl -sL "https://raw.githubusercontent.com/halibiram/SimpleXray/main/xray-patches/$patch" -o "xray-patches/$patch"
-            if [ -f "xray-patches/$patch" ] && [ -s "xray-patches/$patch" ]; then
-              echo "✅ Downloaded: $patch ($(wc -l < xray-patches/$patch) lines)"
-            else
-              echo "❌ Failed to download: $patch"
-              rm -f "xray-patches/$patch"
-            fi
-          done
-        fi
-        
-        echo "📂 Available patches:"
-        ls -la xray-patches/
-
-    - name: Build BoringSSL for Android
-      run: |
-        echo "🔧 Building BoringSSL for Android ABIs..."
-        
-        # Clone BoringSSL
-        git clone --depth=1 https://github.com/google/boringssl.git
-        cd boringssl
-        
-        # Build for each ABI
-        for ABI in "arm64-v8a" "armeabi-v7a" "x86_64"; do
-          echo "📦 Building BoringSSL for $ABI..."
-          
-          # Setup per-ABI configuration
-          case "$ABI" in
-            arm64-v8a)
-              CMAKE_ARCH="arm64-v8a"
-              TOOLCHAIN="aarch64-linux-android24"
-              ;;
-            armeabi-v7a)
-              CMAKE_ARCH="armeabi-v7a"
-              TOOLCHAIN="armv7a-linux-androideabi24"
-              ;;
-            x86_64)
-              CMAKE_ARCH="x86_64"
-              TOOLCHAIN="x86_64-linux-android24"
-              ;;
-          esac
-          
-          TOOLCHAIN_DIR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
-          BUILD_DIR="build_$ABI"
-          mkdir -p "$BUILD_DIR"
-          cd "$BUILD_DIR"
-          
-          # Configure with CMake
-          cmake .. \
-            -DCMAKE_SYSTEM_NAME=Android \
-            -DCMAKE_SYSTEM_VERSION=24 \
-            -DCMAKE_ANDROID_ARCH_ABI=$CMAKE_ARCH \
-            -DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DOPENSSL_SMALL=1 \
-            -DOPENSSL_NO_DEPRECATED=1 \
-            -DBUILD_SHARED_LIBS=OFF \
-            -GNinja
-          
-          # Build
-          ninja -j$(nproc)
-          
-          # Verify
-          if [ ! -f "crypto/libcrypto.a" ] || [ ! -f "ssl/libssl.a" ]; then
-            echo "❌ BoringSSL build failed for $ABI"
-            exit 1
+        # Organize artifacts by ABI
+        for abi in arm64-v8a armeabi-v7a x86_64; do
+          if [ -d "boringssl-artifacts/boringssl-$abi" ]; then
+            echo "✅ Found artifacts for $abi"
+            ls -la boringssl-artifacts/boringssl-$abi/
+          else
+            echo "⚠️  No artifacts found for $abi"
           fi
-          
-          echo "✅ BoringSSL built for $ABI"
-          ls -lh crypto/libcrypto.a ssl/libssl.a
-          
-          cd ..
         done
-        
-        # Export paths for later steps
-        echo "BORINGSSL_DIR=$(pwd)" >> $GITHUB_ENV
-        cd ..
 
     - name: Build
       run: |
@@ -179,7 +207,7 @@ jobs:
 
         echo "Ensuring xray-core is a full git clone..."
         MOD_PATH="$MODCACHE/github.com/xtls/xray-core"
-        rm -rf "$MOD_PATH"  # Remove any proxy-downloaded copy
+        rm -rf "$MOD_PATH"
         XRAY_PATH="$GITHUB_WORKSPACE/_deps/xray-core"
         rm -rf "$XRAY_PATH"
         
@@ -202,210 +230,179 @@ jobs:
          echo "⚠️ xray-core is NOT at latest origin/main"
          git log --oneline --decorate --max-count=5 origin/main
         fi
+        
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
         if [ "${{ github.event.inputs.merge_dns }}" != "0" ]; then
          DNS_MSG="refactor(dns): streamline query handling and remove redundant deadline logic"
-
          git remote add j2rong4cn https://github.com/j2rong4cn/Xray-core.git
          git fetch j2rong4cn main
-
          DNS_HOST_SHA=$(git log j2rong4cn/main --grep="$DNS_MSG" --format="%H" -n 1)
 
          if [ -n "$DNS_HOST_SHA" ]; then
           echo "Found commit: $DNS_HOST_SHA"
           git cherry-pick "$DNS_HOST_SHA" || true
-         else
-          echo "$DNS_MSG"
          fi
         fi
        
-        
-        COUNT=${{ github.event.inputs.pr_count }}
+        # Merge PRs if requested
         IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
-          for PR_NUM in "${PR_LIST[@]}"; do
+        for PR_NUM in "${PR_LIST[@]}"; do
+          if [ "$PR_NUM" != "0" ] && [ -n "$PR_NUM" ]; then
             echo "Fetching PR #$PR_NUM..."
             git fetch origin pull/$PR_NUM/head:pr-$PR_NUM
-            echo "Merging PR #$PR_NUM (auto-resolve: theirs)..."
+            echo "Merging PR #$PR_NUM..."
             git merge -X theirs --no-edit pr-$PR_NUM || true
-            echo "Changes from PR #$PR_NUM:"
-            git log HEAD~1..HEAD --stat || true
-          done
-
-        # Merge branch from   repo if requested
-        if [ "${{ github.event.inputs.fetch_branches_from_other }}" != "0" ]; then
-         BRANCH_INPUT="${{ github.event.inputs.fetch_branches_from_other }}"
-        fi
-        if [[ "$BRANCH_INPUT" != "0" ]]; then
-        IFS=',' read -ra EXT_LIST <<< "$BRANCH_INPUT"
-         for ITEM in "${EXT_LIST[@]}"; do
-         REPO=$(echo "$ITEM" | awk '{print $1}')
-         BRANCH=$(echo "$ITEM" | awk '{print $2}')
-
-        echo "Fetching branch '$BRANCH' from repo '$REPO'..."
-
-        # Name remote based on repo to avoid collision
-        REMOTE_NAME="ext_$(echo "$REPO" | sed 's|/|_|g')"
-
-        git remote add "$REMOTE_NAME" "https://github.com/$REPO.git" || true
-        git fetch "$REMOTE_NAME" "$BRANCH"
-
-        echo "Merging $REMOTE_NAME/$BRANCH (auto-resolve theirs)..."
-        git merge -X theirs --no-edit "$REMOTE_NAME/$BRANCH" || true
-
-        git add -A
-        echo "Changes from $REMOTE_NAME/$BRANCH:"
-        git log HEAD~1..HEAD --stat || true
-
+          fi
         done
+
+        # Merge branch from other repo if requested
+        if [ "${{ github.event.inputs.fetch_branches_from_other }}" != "0" ]; then
+          BRANCH_INPUT="${{ github.event.inputs.fetch_branches_from_other }}"
+          IFS=',' read -ra EXT_LIST <<< "$BRANCH_INPUT"
+          for ITEM in "${EXT_LIST[@]}"; do
+            REPO=$(echo "$ITEM" | awk '{print $1}')
+            BRANCH=$(echo "$ITEM" | awk '{print $2}')
+            echo "Fetching branch '$BRANCH' from repo '$REPO'..."
+            REMOTE_NAME="ext_$(echo "$REPO" | sed 's|/|_|g')"
+            git remote add "$REMOTE_NAME" "https://github.com/$REPO.git" || true
+            git fetch "$REMOTE_NAME" "$BRANCH"
+            git merge -X theirs --no-edit "$REMOTE_NAME/$BRANCH" || true
+          done
         fi          
                 
         # Apply BoringSSL patches
         echo "📝 Applying BoringSSL patches to Xray-core..."
         if [ -d "$GITHUB_WORKSPACE/xray-patches" ]; then
-          PATCH_COUNT=$(ls -1 $GITHUB_WORKSPACE/xray-patches/*.patch 2>/dev/null | wc -l)
-          echo "Found $PATCH_COUNT patch files"
-          
           for patch in $GITHUB_WORKSPACE/xray-patches/*.patch; do
             if [ -f "$patch" ]; then
               echo "  Applying: $(basename $patch)"
               if git apply --check "$patch" 2>/dev/null; then
-                git apply "$patch" && echo "    ✅ Applied successfully" || echo "    ❌ Apply failed"
+                git apply "$patch" && echo "    ✅ Applied" || echo "    ❌ Failed"
               else
-                echo "    ⚠️  Patch $(basename $patch) cannot be applied cleanly (may already be applied or incompatible)"
-                git apply "$patch" || true
+                echo "    ⚠️  Cannot apply cleanly, trying 3-way merge..."
+                git apply --3way "$patch" || true
               fi
             fi
           done
-        else
-          echo "⚠️  No xray-patches directory found"
         fi
         
+        # Apply xmux patch
         wget https://raw.githubusercontent.com/t-e-s-tweb/v-rules/refs/heads/main/xmuxpatch.sh
         bash xmuxpatch.sh
+        
         cd ${{ github.workspace }}/
 
         echo "Updating go.mod to use local xray-core..."
         go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
-        #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260109181451-4be7c433dae2
-
-        #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20250606001031-fa4c4dd86b43
-          
-        # Update specific dependency
-        #go get github.com/xtls/xray-core@${{ env.LATEST_TAG_SHA }}
-
-        # Update all other dependencies
-        
-        
         go get golang.org/x/mobile@latest
         go mod tidy
         go mod download
-        
 
-        
-        
         echo "Binding for Android..."
-        # Export parallel compilation (uses all CPU cores for faster builds)
         export GOMAXPROCS=$(nproc)
         export CGO_ENABLED=1
         export GOEXPERIMENT="runtimefreegc,sizespecializedmalloc,greenteagc,jsonv2,newinliner,heapminimum512kib"
+        
         echo "Initializing gomobile..."
         gomobile init -v
         go mod tidy
 
-
-       
-        export CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
-        export CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
-        export CGO_CFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I${{ env.BORINGSSL_DIR }}/include"
-        export CGO_CXXFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I${{ env.BORINGSSL_DIR }}/include"
-
-        # Link BoringSSL static libraries for arm64-v8a (primary target)
-        export CGO_LDFLAGS="-L${{ env.BORINGSSL_DIR }}/build_arm64-v8a -lcrypto -lssl -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-z,separate-loadable-segments -Wl,-z,now -Wl,--gc-sections -Wl,--strip-all"
+        # Setup NDK paths
+        NDK_TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+        NDK_SYSROOT="$NDK_TOOLCHAIN/sysroot"
         
+        # Primary ABI (arm64-v8a) - BoringSSL paths
+        BORINGSSL_BASE="$GITHUB_WORKSPACE/boringssl-artifacts/boringssl-arm64-v8a"
+        BORINGSSL_CRYPTO="$BORINGSSL_BASE/crypto/libcrypto.a"
+        BORINGSSL_SSL="$BORINGSSL_BASE/ssl/libssl.a"
+        BORINGSSL_INCLUDE="$BORINGSSL_BASE/include"
+        
+        # Verify BoringSSL files exist
+        if [ ! -f "$BORINGSSL_CRYPTO" ] || [ ! -f "$BORINGSSL_SSL" ]; then
+          echo "❌ BoringSSL libraries not found!"
+          echo "Looking for: $BORINGSSL_CRYPTO"
+          echo "Looking for: $BORINGSSL_SSL"
+          find $GITHUB_WORKSPACE/boringssl-artifacts -name "*.a" -type f
+          exit 1
+        fi
+        
+        echo "✅ BoringSSL libraries found:"
+        ls -lh "$BORINGSSL_CRYPTO" "$BORINGSSL_SSL"
+
+        # Set compiler for arm64-v8a (primary target for gomobile)
+        export CC="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang"
+        export CXX="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang++"
+        export AR="$NDK_TOOLCHAIN/bin/llvm-ar"
+        export RANLIB="$NDK_TOOLCHAIN/bin/llvm-ranlib"
+        
+        # CGO flags with BoringSSL
+        export CGO_CFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
+        export CGO_CXXFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
+        
+        # Hybrid static/dynamic linking (from working workflow)
+        export CGO_LDFLAGS="\
+          -Wl,-Bstatic \
+          -L$(dirname $BORINGSSL_CRYPTO) -L$(dirname $BORINGSSL_SSL) \
+          -lcrypto -lssl \
+          -Wl,-Bdynamic \
+          -L$NDK_SYSROOT/usr/lib/aarch64-linux-android/24 \
+          -llog -landroid -lc -lm -ldl \
+          --sysroot=$NDK_SYSROOT \
+          -Wl,-z,max-page-size=16384 \
+          -Wl,-z,common-page-size=16384 \
+          -Wl,-z,separate-loadable-segments \
+          -Wl,-z,now \
+          -Wl,--gc-sections"
+
         echo "=== BUILD ENV ==="
-        echo "GOOS=$GOOS"
-        echo "GOARCH=$GOARCH"
+        echo "GOOS=android"
+        echo "GOARCH=arm64"
         echo "CC=$CC"
         echo "CGO_CFLAGS=$CGO_CFLAGS"
         echo "CGO_LDFLAGS=$CGO_LDFLAGS"
-        go env GOOS GOARCH CC CGO_CFLAGS
         echo "=================="
-        gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
-  
         
-        #export CGO_LDFLAGS="-fuse-ld=lld -Wl,-z,separate-loadable-segments -Wl,-z,common-page-size=0x4000 -Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections"
-        #gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" \
-        #-ldflags="-s -w -buildid='' -linkmode external -extldflags='-Wl,-z,now -Wl,-z,separate-loadable-segments -Wl,-z,common-page-size=0x4000 -Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections'" \
-        #./
-        #gomobile bind -androidapi 24 -trimpath -gcflags="all=-l=4" \
-        #-ldflags="-s -w -buildid='' -linkmode external -extldflags=-Wl,-z,now,-Wl,-z,separate-loadable-segments,-Wl,-z,common-page-size=0x4000,-Wl,-z,max-page-size=0x4000,-Wl,--strip-all,-Wl,--gc-sections" \
-        #./
-
-        #gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -buildid='' -linkmode external -extldflags=\"$CGO_LDFLAGS\"" ./
-
-        #gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -buildid='' -linkmode external -extldflags=$CGO_LDFLAGS" ./
-  
+        # Build with gomobile
+        gomobile bind -v -x -androidapi 24 -trimpath \
+          -gcflags="all=-l=4" \
+          -ldflags="-s -w -linkmode=external" \
+          ./
 
     - name: Strip native libraries in AAR
       run: |
-       # Setup paths
         AAR_FILE="libv2ray.aar"
         EXTRACT_DIR="aar_extract"
         NDK_STRIP="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
     
-        # Verify AAR exists
-       if [ ! -f "$AAR_FILE" ]; then
-        echo "Error: $AAR_FILE not found!"
-        exit 1
-       fi
+        if [ ! -f "$AAR_FILE" ]; then
+          echo "Error: $AAR_FILE not found!"
+          exit 1
+        fi
     
-       # Create extraction directory
-       mkdir -p "$EXTRACT_DIR"
+        mkdir -p "$EXTRACT_DIR"
+        unzip -q "$AAR_FILE" -d "$EXTRACT_DIR"
     
-       # Extract AAR (it's just a ZIP)
-       echo "Extracting $AAR_FILE..."
-       unzip -q "$AAR_FILE" -d "$EXTRACT_DIR"
+        echo "Stripping native libraries..."
+        find "$EXTRACT_DIR" -name "*.so" -type f | while read -r so_file; do
+          arch=$(basename "$(dirname "$so_file")")
+          echo "  Processing [$arch]: $(basename "$so_file")"
+          size_before=$(stat -c%s "$so_file" 2>/dev/null || stat -f%z "$so_file" 2>/dev/null)
+          "$NDK_STRIP" --strip-all "$so_file"
+          size_after=$(stat -c%s "$so_file" 2>/dev/null || stat -f%z "$so_file" 2>/dev/null)
+          saved=$((size_before - size_after))
+          echo "    Saved: $saved bytes"
+        done
     
-       # Find and strip all .so files
-       echo "Stripping native libraries..."
-       find "$EXTRACT_DIR" -name "*.so" -type f | while read -r so_file; do
-       arch=$(basename "$(dirname "$so_file")")
-       echo "  Processing [$arch]: $(basename "$so_file")"
-      
-       # Get size before
-       size_before=$(stat -c%s "$so_file" 2>/dev/null || stat -f%z "$so_file" 2>/dev/null)
-      
-       # Strip: --strip-all removes all symbols (same as -s)
-       "$NDK_STRIP" --strip-all "$so_file"
-      
-       # Get size after
-       size_after=$(stat -c%s "$so_file" 2>/dev/null || stat -f%z "$so_file" 2>/dev/null)
-       saved=$((size_before - size_after))
-      
-       echo "    Saved: $saved bytes ($(numfmt --to=iec $saved 2>/dev/null || echo "$saved"))"
-       done
+        echo "Repackaging AAR..."
+        cd "$EXTRACT_DIR"
+        zip -r -X -9 "../${AAR_FILE}.tmp" .
+        cd ..
+        mv "${AAR_FILE}.tmp" "$AAR_FILE"
+        rm -rf "$EXTRACT_DIR"
     
-       # Repackage AAR with maximum compression
-       echo "Repackaging AAR..."
-       cd "$EXTRACT_DIR"
-     
-       # Create new AAR with optimized compression
-       # -X: no extra file attributes (cleaner)
-       # -9: maximum compression
-       zip -r -X -9 "../${AAR_FILE}.tmp" .
-       cd ..
-    
-       # Replace original
-       mv "${AAR_FILE}.tmp" "$AAR_FILE"
-    
-       # Cleanup
-       rm -rf "$EXTRACT_DIR"
-    
-       # Show final result
-       echo "Post-strip AAR size: $(ls -lh $AAR_FILE | awk '{print $5}')"
-
+        echo "Post-strip AAR size: $(ls -lh $AAR_FILE | awk '{print $5}')"
 
     - name: Upload build artifacts
       if: github.event.inputs.release_tag == ''
