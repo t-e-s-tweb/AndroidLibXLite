@@ -1,4 +1,4 @@
-name: Build mod optimise v6 boringssl
+name: Build mod optimise v6
 
 on:
   workflow_dispatch:
@@ -72,44 +72,25 @@ jobs:
         
         BORINGSSL_DIR="app/src/main/jni/perf-net/third_party/boringssl"
         
-        # Check if BoringSSL is already initialized
         if [ -d "$BORINGSSL_DIR" ] && [ -f "$BORINGSSL_DIR/CMakeLists.txt" ]; then
             echo "✅ BoringSSL source already exists at $BORINGSSL_DIR"
-        
-            # Verify headers are present
             if [ -f "$BORINGSSL_DIR/include/openssl/ssl.h" ]; then
                 echo "✅ BoringSSL headers verified"
-        
-                # Get commit hash for reference
                 cd "$BORINGSSL_DIR"
                 COMMIT=$(git rev-parse HEAD | cut -c 1-12)
                 echo "📌 BoringSSL commit: $COMMIT"
                 cd - > /dev/null
-        
-                echo ""
-                echo "BoringSSL is ready for use!"
                 exit 0
-            else
-                echo "⚠️  BoringSSL source exists but headers are missing"
-                echo "   Reinitializing submodule..."
             fi
         fi
         
-        # Initialize BoringSSL as a git submodule
         echo "📦 Initializing BoringSSL submodule..."
-        echo "   This may take a few minutes..."
         
-        # First, make sure submodule is registered
         if ! git config -f .gitmodules --get submodule.app/src/main/jni/perf-net/third_party/boringssl.url > /dev/null 2>&1; then
             echo "⚠️  BoringSSL submodule not found in .gitmodules"
-            echo "   Adding BoringSSL as a submodule..."
-        
-            # Remove directory if it exists but is not a proper submodule
             if [ -d "$BORINGSSL_DIR" ]; then
                 rm -rf "$BORINGSSL_DIR"
             fi
-        
-            # Add as submodule
             git submodule add --force https://boringssl.googlesource.com/boringssl "$BORINGSSL_DIR" || {
                 echo "⚠️  Failed to add from googlesource, trying GitHub mirror..."
                 git submodule add --force https://github.com/google/boringssl.git "$BORINGSSL_DIR" || {
@@ -119,37 +100,27 @@ jobs:
             }
         fi
         
-        # Initialize and update the submodule
         if git submodule update --init --depth 1 "$BORINGSSL_DIR" 2>&1; then
             echo "✅ BoringSSL submodule initialized successfully"
         else
-            echo "⚠️  Submodule init failed, trying alternative method..."
-        
-            # Try without depth limitation
             if git submodule update --init "$BORINGSSL_DIR" 2>&1; then
                 echo "✅ BoringSSL submodule initialized successfully"
             else
                 echo "❌ Failed to initialize BoringSSL submodule"
-                echo "   Please check your internet connection and try again"
                 exit 1
             fi
         fi
         
-        # Verify CMakeLists.txt exists
         if [ ! -f "$BORINGSSL_DIR/CMakeLists.txt" ]; then
-            echo "❌ BoringSSL CMakeLists.txt not found after initialization!"
-            echo "   This indicates an incomplete or corrupted clone"
+            echo "❌ BoringSSL CMakeLists.txt not found!"
             exit 1
         fi
         
-        # Verify headers exist
         if [ ! -f "$BORINGSSL_DIR/include/openssl/ssl.h" ]; then
-            echo "❌ BoringSSL headers not found after initialization!"
-            echo "   This indicates an incomplete or corrupted clone"
+            echo "❌ BoringSSL headers not found!"
             exit 1
         fi
         
-        # Get commit hash for reference
         cd "$BORINGSSL_DIR"
         COMMIT=$(git rev-parse HEAD | cut -c 1-12)
         echo "✅ BoringSSL pinned to commit: $COMMIT"
@@ -166,16 +137,12 @@ jobs:
         
         ABI="arm64-v8a"
         NDK_HOME="$ANDROID_NDK_HOME"
-        
-        # ABI configuration
         TOOLCHAIN="aarch64-linux-android24"
         CMAKE_ARCH="arm64-v8a"
         
         echo "NDK: $NDK_HOME"
         echo "Toolchain: $TOOLCHAIN"
-        echo "✅ Detected ARM64 with crypto extensions support"
         
-        # Find BoringSSL directory
         BORINGSSL_DIR="app/src/main/jni/perf-net/third_party/boringssl"
         if [ ! -d "$BORINGSSL_DIR" ]; then
             echo "❌ BoringSSL directory not found: $BORINGSSL_DIR"
@@ -184,7 +151,6 @@ jobs:
         
         cd "$BORINGSSL_DIR"
         
-        # Setup toolchain
         TOOLCHAIN_DIR="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
         export PATH=$TOOLCHAIN_DIR/bin:$PATH
         export CC=$TOOLCHAIN_DIR/bin/$TOOLCHAIN-clang
@@ -195,16 +161,12 @@ jobs:
         export ANDROID_NDK_HOME=$NDK_HOME
         export ANDROID_NDK_ROOT=$NDK_HOME
         
-        # Create build directory
         BUILD_DIR="build_$ABI"
         mkdir -p "$BUILD_DIR"
         cd "$BUILD_DIR"
         
         echo "📦 Current directory: $(pwd)"
-        echo "📦 Parent directory: $(cd .. && pwd)"
         
-        # Configure BoringSSL with CMake (disable benchmarks to avoid build errors)
-        echo "📦 Configuring BoringSSL with CMake..."
         cmake .. \
             -DCMAKE_SYSTEM_NAME=Android \
             -DCMAKE_SYSTEM_VERSION=24 \
@@ -227,37 +189,28 @@ jobs:
             exit 1
         fi
         
-        # Build only crypto and ssl (skip benchmarks and tests)
-        echo "🔨 Building BoringSSL..."
         ninja -v crypto ssl 2>&1 | tee ninja.log
         
         NINJA_EXIT=${PIPESTATUS[0]}
         if [ $NINJA_EXIT -ne 0 ]; then
             echo "❌ Ninja build failed with exit code $NINJA_EXIT"
-            echo "Last 50 lines of build log:"
             tail -50 ninja.log
             exit 1
         fi
         
-        # Debug: Show all files in build directory
         echo "📂 Build directory contents:"
         ls -la
-        
-        # Debug: Find all .a files
         echo "📂 Searching for all .a files:"
         find . -name "*.a" -type f 2>/dev/null || echo "No .a files found"
         
-        # Verify build - check multiple possible locations
         CRYPTO_LIB=""
         SSL_LIB=""
         
-        # Check standard locations
         if [ -f "crypto/libcrypto.a" ]; then
             CRYPTO_LIB="$(pwd)/crypto/libcrypto.a"
         elif [ -f "libcrypto.a" ]; then
             CRYPTO_LIB="$(pwd)/libcrypto.a"
         else
-            # Search for it
             CRYPTO_LIB=$(find . -name "libcrypto.a" -type f | head -1)
         fi
         
@@ -266,37 +219,29 @@ jobs:
         elif [ -f "libssl.a" ]; then
             SSL_LIB="$(pwd)/libssl.a"
         else
-            # Search for it
             SSL_LIB=$(find . -name "libssl.a" -type f | head -1)
         fi
         
         if [ -z "$CRYPTO_LIB" ] || [ -z "$SSL_LIB" ]; then
             echo "❌ Build failed - libraries not found"
-            echo "Searched in: $(pwd)"
-            echo ""
-            echo "Directory structure:"
             find . -type f -name "*.a" -o -name "libcrypto*" -o -name "libssl*" 2>/dev/null | head -20
             exit 1
         fi
         
         echo "✅ BoringSSL build complete for $ABI"
-        echo "📦 Libraries:"
         ls -lh "$CRYPTO_LIB" "$SSL_LIB"
         
-        # Save paths for later steps
         echo "BORINGSSL_CRYPTO=$(realpath "$CRYPTO_LIB")" >> $GITHUB_ENV
         echo "BORINGSSL_SSL=$(realpath "$SSL_LIB")" >> $GITHUB_ENV
         echo "BORINGSSL_INCLUDE=$(realpath ../include)" >> $GITHUB_ENV
         
         cd ${{ github.workspace }}
 
-
     - name: Download xray-patches
       run: |
         echo "📥 Downloading xray-patches for BoringSSL integration..."
         mkdir -p xray-patches
         
-        # Use GitHub API to list files in the directory
         PATCHES=$(curl -s "https://api.github.com/repos/halibiram/SimpleXray/contents/xray-patches" | grep -o '"name": "[^"]*\.patch"' | cut -d'"' -f4)
         
         for patch in $PATCHES; do
@@ -307,7 +252,7 @@ jobs:
         echo "📂 Available patches:"
         ls -la xray-patches/
 
-    - name: Build Xray with Gomobile
+    - name: Prepare Xray-core
       run: |
         mkdir -p assets data
         bash gen_assets.sh download
@@ -316,11 +261,9 @@ jobs:
         go env -w GOPRIVATE=github.com/xtls/xray-core
         go env -w GONOSUMDB=github.com/xtls/xray-core
 
-        echo "Finding Go module cache path..."
         MODCACHE=$(go env GOMODCACHE)
         echo "Module cache path: $MODCACHE"
 
-        echo "Ensuring xray-core is a full git clone..."
         MOD_PATH="$MODCACHE/github.com/xtls/xray-core"
         rm -rf "$MOD_PATH"
         XRAY_PATH="$GITHUB_WORKSPACE/_deps/xray-core"
@@ -328,11 +271,18 @@ jobs:
         
         git clone https://github.com/xtls/xray-core.git "$XRAY_PATH"
         cd "$XRAY_PATH"
-        git checkout main
-
-        echo "Fetching latest refs from origin..."
+        
+        git checkout main || {
+          echo "⚠️  v25.10.15 not found, trying v25.9.30..."
+          git checkout v25.9.30 || {
+            echo "⚠️  Falling back to main branch"
+            git checkout main
+          }
+        }
+        
+        echo "Using Xray-core version: $(git describe --tags --always 2>/dev/null || git rev-parse --short HEAD)"
+        
         git fetch origin main
-
         LOCAL_SHA=$(git rev-parse HEAD)
         REMOTE_SHA=$(git rev-parse origin/main)
 
@@ -343,7 +293,6 @@ jobs:
          echo "✅ xray-core is up to date with origin/main"
         else
          echo "⚠️ xray-core is NOT at latest origin/main"
-         git log --oneline --decorate --max-count=5 origin/main
         fi
         
         git config user.name "github-actions[bot]"
@@ -361,7 +310,6 @@ jobs:
          fi
         fi
        
-        # Merge PRs if requested
         IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
         for PR_NUM in "${PR_LIST[@]}"; do
           if [ "$PR_NUM" != "0" ] && [ -n "$PR_NUM" ]; then
@@ -372,7 +320,6 @@ jobs:
           fi
         done
 
-        # Merge branch from other repo if requested
         if [ "${{ github.event.inputs.fetch_branches_from_other }}" != "0" ]; then
           BRANCH_INPUT="${{ github.event.inputs.fetch_branches_from_other }}"
           IFS=',' read -ra EXT_LIST <<< "$BRANCH_INPUT"
@@ -385,32 +332,317 @@ jobs:
             git fetch "$REMOTE_NAME" "$BRANCH"
             git merge -X theirs --no-edit "$REMOTE_NAME/$BRANCH" || true
           done
-        fi          
-                
-        # Apply BoringSSL patches
-        echo "📝 Applying BoringSSL patches to Xray-core..."
-        if [ -d "$GITHUB_WORKSPACE/xray-patches" ]; then
-          for patch in $GITHUB_WORKSPACE/xray-patches/*.patch; do
-            if [ -f "$patch" ]; then
-              echo "  Applying: $(basename $patch)"
-              if git apply --check "$patch" 2>/dev/null; then
-                git apply "$patch" && echo "    ✅ Applied" || echo "    ❌ Failed"
-              else
-                echo "    ⚠️  Cannot apply cleanly, trying 3-way merge..."
-                git apply --3way "$patch" || true
-              fi
-            fi
-          done
         fi
         
-        # Apply xmux patch
         wget https://raw.githubusercontent.com/t-e-s-tweb/v-rules/refs/heads/main/xmuxpatch.sh
         bash xmuxpatch.sh
         
-        cd ${{ github.workspace }}/
+        cd ${{ github.workspace }}
 
         echo "Updating go.mod to use local xray-core..."
         go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
+
+    - name: Apply Patches (Required)
+      working-directory: ${{ github.workspace }}/_deps/xray-core
+      run: |
+        echo "🔧 Applying BoringSSL patches (ALL PATCHES REQUIRED)"
+        echo "⚠️  Any patch failure will cause build to fail"
+
+        XRAY_CURRENT_VERSION=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)
+        echo "📌 Xray-core version: $XRAY_CURRENT_VERSION"
+
+        if [ ! -d "$GITHUB_WORKSPACE/xray-patches" ]; then
+          echo "❌ ERROR: xray-patches directory not found!"
+          echo "   Patches are required for BoringSSL integration"
+          exit 1
+        fi
+
+        PATCH_COUNT=0
+        SUCCESS_COUNT=0
+        SKIP_COUNT=0
+        FAILED_COUNT=0
+        CRITICAL_PATCHES=()
+
+        for patch in $(ls -1 $GITHUB_WORKSPACE/xray-patches/*.patch 2>/dev/null | sort); do
+          if [ ! -f "$patch" ]; then
+            continue
+          fi
+          
+          PATCH_COUNT=$((PATCH_COUNT + 1))
+          PATCH_NAME=$(basename "$patch")
+          
+          if ! grep -q "^diff --git\|^---\|^\+\+\+" "$patch" 2>/dev/null; then
+            echo "ℹ️  Skipping $PATCH_NAME (placeholder/documentation only)"
+            SKIP_COUNT=$((SKIP_COUNT + 1))
+            continue
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📝 Applying patch: $PATCH_NAME"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          PATCH_VERSION=$(grep -i "xray.*version\|xray.*tag" "$patch" | head -1 || echo "")
+          if [ -n "$PATCH_VERSION" ]; then
+            echo "   Patch version info: $PATCH_VERSION"
+          fi
+          
+          if ! head -1 "$patch" | grep -q "^diff --git"; then
+            echo "❌ ERROR: Invalid patch format in $PATCH_NAME"
+            echo "   First line: $(head -1 "$patch")"
+            CRITICAL_PATCHES+=("$PATCH_NAME (invalid format)")
+            FAILED_COUNT=$((FAILED_COUNT + 1))
+            continue
+          fi
+          
+          if grep -q "index 0000000\.\.1111111" "$patch"; then
+            echo "⚠️  WARNING: Patch contains placeholder index values"
+            echo "   This may indicate an incomplete patch file"
+          fi
+          
+          echo "   Running: git apply --check \"$patch\""
+          set +e
+          git apply --check "$patch" > /tmp/patch_check_stdout.txt 2> /tmp/patch_check_stderr.txt
+          PATCH_CHECK_EXIT=$?
+          set -e
+          PATCH_CHECK_OUTPUT=$(cat /tmp/patch_check_stdout.txt /tmp/patch_check_stderr.txt 2>/dev/null || echo "")
+          echo "   Check exit code: $PATCH_CHECK_EXIT"
+          if [ $PATCH_CHECK_EXIT -ne 0 ]; then
+            echo "   Error output (stdout):"
+            cat /tmp/patch_check_stdout.txt 2>/dev/null | sed 's/^/      /' || echo "      (empty)"
+            echo "   Error output (stderr):"
+            cat /tmp/patch_check_stderr.txt 2>/dev/null | sed 's/^/      /' || echo "      (empty)"
+          fi
+          
+          if [ $PATCH_CHECK_EXIT -eq 0 ]; then
+            echo "   Running: git apply \"$patch\""
+            set +e
+            PATCH_APPLY_OUTPUT=$(git apply "$patch" 2>&1)
+            PATCH_APPLY_EXIT=$?
+            set -e
+            echo "   Apply exit code: $PATCH_APPLY_EXIT"
+            
+            if [ $PATCH_APPLY_EXIT -eq 0 ]; then
+              echo "✅ Successfully applied: $PATCH_NAME"
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            else
+              echo "❌ ERROR: Failed to apply $PATCH_NAME"
+              echo "   Exit code: $PATCH_APPLY_EXIT"
+              echo "   Error output:"
+              echo "$PATCH_APPLY_OUTPUT" | sed 's/^/   /'
+              
+              echo "   Checking if patch is already applied..."
+              set +e
+              if git apply --reverse --check "$patch" 2>/dev/null; then
+                set -e
+                echo "   ℹ️  Patch appears to be already applied (reversing check passed)"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+              else
+                set -e
+                echo "   ❌ Patch is not already applied"
+                
+                echo "   Attempting 3-way merge to resolve conflicts..."
+                set +e
+                PATCH_3WAY_OUTPUT=$(git apply --3way "$patch" 2>&1)
+                PATCH_3WAY_EXIT=$?
+                set -e
+                
+                if [ $PATCH_3WAY_EXIT -eq 0 ]; then
+                  echo "   ✅ Successfully applied with 3-way merge"
+                  SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                else
+                  echo "   ❌ 3-way merge also failed"
+                  echo "   3-way merge output:"
+                  echo "$PATCH_3WAY_OUTPUT" | sed 's/^/      /' || true
+                  CRITICAL_PATCHES+=("$PATCH_NAME (apply failed)")
+                  FAILED_COUNT=$((FAILED_COUNT + 1))
+                fi
+              fi
+            fi
+          else
+            echo "❌ ERROR: Patch check failed for: $PATCH_NAME"
+            echo "   Exit code: $PATCH_CHECK_EXIT"
+            echo "   Full error output:"
+            echo "$PATCH_CHECK_OUTPUT" | sed 's/^/   /'
+            
+            if grep -q "^diff --git\|^---\|^\+\+\+" "$patch" 2>/dev/null; then
+              echo "   Patch expects to modify:"
+              grep -E "^diff --git|^---|^\+\+\+" "$patch" | head -5 | sed 's/^/      /' || true
+              
+              PATCH_FILES=$(grep "^diff --git" "$patch" | sed 's/^diff --git a\///;s/ b\/.*$//' | head -3)
+              echo "   Checking if target files exist:"
+              for file in $PATCH_FILES; do
+                if [ -f "$file" ]; then
+                  echo "      ✅ File exists: $file"
+                  echo "      First 5 lines of file:"
+                  head -5 "$file" | sed 's/^/         /' || true
+                else
+                  echo "      ❌ File missing: $file"
+                  echo "      Searching for similar files:"
+                  find . -name "$(basename "$file")" -type f 2>/dev/null | head -3 | sed 's/^/         /' || echo "         (none found)"
+                fi
+              done
+            fi
+            
+            echo "   ℹ️  Attempting various merge strategies for required patch..."
+            
+            if echo "$PATCH_CHECK_OUTPUT" | grep -q "already exists in working directory"; then
+              echo "   ℹ️  Some files already exist - checking if patch content is already present..."
+              set +e
+              if git apply --reverse --check "$patch" 2>/dev/null; then
+                set -e
+                echo "   ✅ Patch content appears to be already applied"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+              else
+                set -e
+                echo "   ⚠️  Files exist but patch not fully applied - attempting 3-way merge..."
+                set +e
+                PATCH_3WAY_OUTPUT=$(git apply --3way "$patch" 2>&1)
+                PATCH_3WAY_EXIT=$?
+                set -e
+                
+                if [ $PATCH_3WAY_EXIT -eq 0 ]; then
+                  echo "   ✅ Successfully applied with 3-way merge"
+                  SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                else
+                  echo "   ❌ 3-way merge failed"
+                  echo "   3-way merge output:"
+                  echo "$PATCH_3WAY_OUTPUT" | sed 's/^/      /' || true
+                  CRITICAL_PATCHES+=("$PATCH_NAME (check failed)")
+                  FAILED_COUNT=$((FAILED_COUNT + 1))
+                fi
+              fi
+            else
+              echo "   Attempting 3-way merge..."
+              set +e
+              PATCH_3WAY_OUTPUT=$(git apply --3way "$patch" 2>&1)
+              PATCH_3WAY_EXIT=$?
+              set -e
+              
+              if [ $PATCH_3WAY_EXIT -eq 0 ]; then
+                echo "   ✅ Successfully applied with 3-way merge"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+              else
+                echo "   ❌ 3-way merge failed"
+                echo "   3-way merge output:"
+                echo "$PATCH_3WAY_OUTPUT" | sed 's/^/      /' || true
+                CRITICAL_PATCHES+=("$PATCH_NAME (check failed)")
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+              fi
+            fi
+          fi
+        done
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📊 Patch Summary"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "   Total patches: $PATCH_COUNT"
+        echo "   ✅ Applied: $SUCCESS_COUNT"
+        echo "   ⏭️  Skipped: $SKIP_COUNT"
+        echo "   ❌ Failed: $FAILED_COUNT"
+
+        if [ $PATCH_COUNT -eq 0 ]; then
+          echo ""
+          echo "❌ ERROR: No patches found in xray-patches directory!"
+          exit 1
+        fi
+
+        CRITICAL_PATCH_NAMES=(
+          "001-boringssl-bridge.patch"
+          "002-crypto-boringssl-cgo.patch"
+          "002-crypto-boringssl-nocgo.patch"
+          "003-tls-boringssl-cgo.patch"
+          "003-tls-boringssl-nocgo.patch"
+          "004-x509-boringssl-cgo.patch"
+          "004-x509-boringssl-nocgo.patch"
+          "005-boringssl-tls-bridge.patch"
+          "006-xray-imports-redirect.patch"
+          "007-boringssl-handshake-trace.patch"
+          "008-boringssl-runtime-detection.patch"
+          "009-aes-gcm-implementation.patch"
+        )
+        CRITICAL_FAILED=()
+
+        for failed_patch in "${CRITICAL_PATCHES[@]}"; do
+          for critical_name in "${CRITICAL_PATCH_NAMES[@]}"; do
+            if [[ "$failed_patch" == *"$critical_name"* ]]; then
+              CRITICAL_FAILED+=("$failed_patch")
+              break
+            fi
+          done
+        done
+
+        if [ ${#CRITICAL_FAILED[@]} -gt 0 ]; then
+          echo ""
+          echo "❌ CRITICAL: The following REQUIRED patches failed to apply:"
+          for failed_patch in "${CRITICAL_FAILED[@]}"; do
+            echo "   - $failed_patch"
+          done
+          echo ""
+          echo "❌ ERROR: Critical patch failures detected - build cannot continue"
+          echo "   These patches are required for BoringSSL integration"
+          echo "   Please fix the patch files and retry"
+          
+        elif [ ${#CRITICAL_PATCHES[@]} -gt 0 ]; then
+          echo ""
+          echo "⚠️  WARNING: Some patches failed but were not in critical list:"
+          for failed_patch in "${CRITICAL_PATCHES[@]}"; do
+            IS_CRITICAL=false
+            for critical_name in "${CRITICAL_PATCH_NAMES[@]}"; do
+              if [[ "$failed_patch" == *"$critical_name"* ]]; then
+                IS_CRITICAL=true
+                break
+              fi
+            done
+            
+            if [ "$IS_CRITICAL" = false ]; then
+              echo "   - $failed_patch"
+            fi
+          done
+          echo ""
+          echo "ℹ️  All patches are required - build will fail if any critical patch fails"
+        fi
+
+        if [ $SUCCESS_COUNT -eq 0 ] && [ $FAILED_COUNT -gt 0 ]; then
+          echo ""
+          echo "❌ ERROR: No patches were successfully applied!"
+          echo "   This indicates a serious problem with patch compatibility"
+          exit 1
+        fi
+
+        if [ $SUCCESS_COUNT -gt 0 ]; then
+          echo ""
+          echo "✅ Successfully applied $SUCCESS_COUNT patch(es) - BoringSSL integration enabled"
+        fi
+
+        echo ""
+        echo "🔍 Verifying Go syntax after patching..."
+        cd ${{ github.workspace }}
+        if ! go build -n ./_deps/xray-core/... 2>&1 | head -20; then
+          echo "❌ Go syntax verification failed!"
+          echo "Checking for syntax errors in modified files..."
+          
+          for file in transport/internet/tls/config.go common/crypto/aes.go; do
+            if [ -f "_deps/xray-core/$file" ]; then
+              echo "Checking $file..."
+              if ! gofmt -e "_deps/xray-core/$file" > /dev/null 2>&1; then
+                echo "❌ Syntax error in $file"
+                echo "Around line 549:"
+                sed -n '540,560p' "_deps/xray-core/$file" 2>/dev/null || true
+              fi
+            fi
+          done
+          exit 1
+        fi
+        echo "✅ Go syntax verification passed"
+        cd _deps/xray-core
+
+        echo ""
+        echo "✅ Patch step complete"
+
+    - name: Build with Gomobile
+      run: |
         go get golang.org/x/mobile@latest
         go mod tidy
         go mod download
@@ -424,34 +656,25 @@ jobs:
         gomobile init -v
         go mod tidy
 
-        # Setup NDK paths
         NDK_TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
         NDK_SYSROOT="$NDK_TOOLCHAIN/sysroot"
         
-        # Verify BoringSSL env vars are set
         if [ -z "$BORINGSSL_CRYPTO" ] || [ -z "$BORINGSSL_SSL" ] || [ -z "$BORINGSSL_INCLUDE" ]; then
           echo "❌ BoringSSL environment variables not set!"
-          echo "BORINGSSL_CRYPTO: $BORINGSSL_CRYPTO"
-          echo "BORINGSSL_SSL: $BORINGSSL_SSL"
-          echo "BORINGSSL_INCLUDE: $BORINGSSL_INCLUDE"
           exit 1
         fi
         
         echo "✅ BoringSSL libraries:"
         ls -lh "$BORINGSSL_CRYPTO" "$BORINGSSL_SSL"
-        echo "✅ BoringSSL include: $BORINGSSL_INCLUDE"
 
-        # Set compiler for arm64-v8a
         export CC="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang"
         export CXX="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang++"
         export AR="$NDK_TOOLCHAIN/bin/llvm-ar"
         export RANLIB="$NDK_TOOLCHAIN/bin/llvm-ranlib"
         
-        # CGO flags with BoringSSL
         export CGO_CFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
         export CGO_CXXFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
         
-        # Hybrid static/dynamic linking
         export CGO_LDFLAGS="\
           -Wl,-Bstatic \
           -L$(dirname $BORINGSSL_CRYPTO) -L$(dirname $BORINGSSL_SSL) \
@@ -474,7 +697,6 @@ jobs:
         echo "CGO_LDFLAGS=$CGO_LDFLAGS"
         echo "=================="
         
-        # Build with gomobile
         gomobile bind -v -x -androidapi 24 -trimpath \
           -gcflags="all=-l=4" \
           -ldflags="-s -w -linkmode=external" \
