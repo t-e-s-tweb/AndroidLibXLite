@@ -185,7 +185,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DOPENSSL_SMALL=1 \
             -DOPENSSL_NO_DEPRECATED=1 \
-            -DOPENSSL_NO_ASM=1 \
+            -DOPENSSL_NO_ASM=0 \
             -DBUILD_SHARED_LIBS=OFF \
             -DBENCHMARK_ENABLE_TESTING=OFF \
             -DBENCHMARK_ENABLE_INSTALL=OFF \
