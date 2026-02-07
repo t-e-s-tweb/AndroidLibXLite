@@ -692,22 +692,72 @@ jobs:
         export AR="$NDK_TOOLCHAIN/bin/llvm-ar"
         export RANLIB="$NDK_TOOLCHAIN/bin/llvm-ranlib"
         
-        export CGO_CFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
-        export CGO_CXXFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
+        # Setup NDK paths (matching working build)
+        NDK_TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+        NDK_SYSROOT="$NDK_TOOLCHAIN/sysroot"
+        ANDROID_API=24
         
+        # Set library path (CRITICAL - was missing)
+        ANDROID_LIB_DIR="$NDK_SYSROOT/usr/lib/aarch64-linux-android/$ANDROID_API"
+        export LIBRARY_PATH="$ANDROID_LIB_DIR:$LIBRARY_PATH"
+        
+        # BoringSSL paths
+        BORINGSSL_CRYPTO_DIR=$(dirname "$BORINGSSL_CRYPTO")
+        BORINGSSL_SSL_DIR=$(dirname "$BORINGSSL_SSL")
+        
+        # Verify libraries exist
+        echo "✅ BoringSSL crypto dir: $BORINGSSL_CRYPTO_DIR"
+        echo "✅ BoringSSL ssl dir: $BORINGSSL_SSL_DIR"
+        ls -la "$BORINGSSL_CRYPTO_DIR"/libcrypto.a "$BORINGSSL_SSL_DIR"/libssl.a
+
+        # Set compiler
+        export CC="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang"
+        export CXX="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang++"
+        export AR="$NDK_TOOLCHAIN/bin/llvm-ar"
+        export RANLIB="$NDK_TOOLCHAIN/bin/llvm-ranlib"
+
+        # CGO flags with optimizations (your extras + working build structure)
+        export CGO_CFLAGS="\
+          -O3 \
+          -fvisibility=hidden \
+          -ffunction-sections \
+          -fdata-sections \
+          -fomit-frame-pointer \
+          -I$BORINGSSL_INCLUDE \
+          --sysroot=$NDK_SYSROOT"
+        
+        export CGO_CXXFLAGS="\
+          -O3 \
+          -fvisibility=hidden \
+          -ffunction-sections \
+          -fdata-sections \
+          -fomit-frame-pointer \
+          -I$BORINGSSL_INCLUDE \
+          --sysroot=$NDK_SYSROOT"
+        
+        # CGO_LDFLAGS with optimizations (your extras + working build structure)
         export CGO_LDFLAGS="\
           -Wl,-Bstatic \
-          -L$(dirname $BORINGSSL_CRYPTO) -L$(dirname $BORINGSSL_SSL) \
-          -lcrypto -lssl \
+          -L$BORINGSSL_CRYPTO_DIR \
+          -L$BORINGSSL_SSL_DIR \
+          -lcrypto \
+          -lssl \
           -Wl,-Bdynamic \
-          -L$NDK_SYSROOT/usr/lib/aarch64-linux-android/24 \
-          -llog -landroid -lc -lm -ldl \
+          -L$ANDROID_LIB_DIR \
+          -L$NDK_SYSROOT/usr/lib \
+          -L$NDK_SYSROOT/usr/lib64 \
+          -llog \
+          -landroid \
+          -lc \
+          -lm \
+          -ldl \
           --sysroot=$NDK_SYSROOT \
           -Wl,-z,max-page-size=16384 \
           -Wl,-z,common-page-size=16384 \
           -Wl,-z,separate-loadable-segments \
           -Wl,-z,now \
           -Wl,--gc-sections"
+
 
         echo "=== BUILD ENV ==="
         echo "GOOS=android"
