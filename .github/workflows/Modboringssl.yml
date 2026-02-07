@@ -200,7 +200,7 @@ jobs:
         mkdir -p "$BUILD_DIR"
         cd "$BUILD_DIR"
         
-        # Configure BoringSSL with CMake
+        # Configure BoringSSL with CMake (disable benchmarks to avoid build errors)
         echo "📦 Configuring BoringSSL with CMake..."
         cmake .. \
             -DCMAKE_SYSTEM_NAME=Android \
@@ -213,11 +213,16 @@ jobs:
             -DOPENSSL_NO_DEPRECATED=1 \
             -DOPENSSL_NO_ASM=0 \
             -DBUILD_SHARED_LIBS=OFF \
+            -DBENCHMARK_ENABLE_TESTING=OFF \
+            -DBENCHMARK_ENABLE_INSTALL=OFF \
+            -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
             -GNinja
+
         
-        # Build
+        # Build only crypto and ssl (skip benchmarks and tests)
         echo "🔨 Building BoringSSL..."
-        ninja -j$(nproc)
+        ninja -j$(nproc) crypto ssl
+
         
         # Verify build
         if [ -f "crypto/libcrypto.a" ] && [ -f "ssl/libssl.a" ]; then
