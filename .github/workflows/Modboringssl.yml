@@ -183,14 +183,15 @@ jobs:
             -DCMAKE_ANDROID_NDK=$NDK_HOME \
             -DCMAKE_TOOLCHAIN_FILE=$NDK_HOME/build/cmake/android.toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-fno-exceptions -fno-rtti" \
             -DOPENSSL_SMALL=1 \
             -DOPENSSL_NO_DEPRECATED=1 \
             -DOPENSSL_NO_ASM=0 \
             -DBUILD_SHARED_LIBS=OFF \
             -DBENCHMARK_ENABLE_TESTING=OFF \
             -DBENCHMARK_ENABLE_INSTALL=OFF \
-            -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
             -GNinja
+
 
         
         CMAKE_EXIT=${PIPESTATUS[0]}
@@ -746,6 +747,7 @@ jobs:
           -L$ANDROID_LIB_DIR \
           -L$NDK_SYSROOT/usr/lib \
           -L$NDK_SYSROOT/usr/lib64 \
+          -lc++ \
           -llog \
           -landroid \
           -lc \
@@ -757,6 +759,7 @@ jobs:
           -Wl,-z,separate-loadable-segments \
           -Wl,-z,now \
           -Wl,--gc-sections"
+
 
 
         echo "=== BUILD ENV ==="
