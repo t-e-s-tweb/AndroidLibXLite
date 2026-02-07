@@ -200,6 +200,9 @@ jobs:
         mkdir -p "$BUILD_DIR"
         cd "$BUILD_DIR"
         
+        echo "📦 Current directory: $(pwd)"
+        echo "📦 Parent directory: $(cd .. && pwd)"
+        
         # Configure BoringSSL with CMake (disable benchmarks to avoid build errors)
         echo "📦 Configuring BoringSSL with CMake..."
         cmake .. \
@@ -216,30 +219,77 @@ jobs:
             -DBENCHMARK_ENABLE_TESTING=OFF \
             -DBENCHMARK_ENABLE_INSTALL=OFF \
             -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
-            -GNinja
-
+            -GNinja 2>&1 | tee cmake.log
         
-        # Build only crypto and ssl (skip benchmarks and tests)
-        echo "🔨 Building BoringSSL..."
-        ninja -j$(nproc) crypto ssl
-
-        
-        # Verify build
-        if [ -f "crypto/libcrypto.a" ] && [ -f "ssl/libssl.a" ]; then
-            echo "✅ BoringSSL build complete for $ABI"
-            echo "📦 Libraries:"
-            ls -lh crypto/libcrypto.a ssl/libssl.a
-        else
-            echo "❌ Build failed - libraries not found"
+        CMAKE_EXIT=${PIPESTATUS[0]}
+        if [ $CMAKE_EXIT -ne 0 ]; then
+            echo "❌ CMake configuration failed with exit code $CMAKE_EXIT"
             exit 1
         fi
         
+        # Build only crypto and ssl (skip benchmarks and tests)
+        echo "🔨 Building BoringSSL..."
+        ninja -v crypto ssl 2>&1 | tee ninja.log
+        
+        NINJA_EXIT=${PIPESTATUS[0]}
+        if [ $NINJA_EXIT -ne 0 ]; then
+            echo "❌ Ninja build failed with exit code $NINJA_EXIT"
+            echo "Last 50 lines of build log:"
+            tail -50 ninja.log
+            exit 1
+        fi
+        
+        # Debug: Show all files in build directory
+        echo "📂 Build directory contents:"
+        ls -la
+        
+        # Debug: Find all .a files
+        echo "📂 Searching for all .a files:"
+        find . -name "*.a" -type f 2>/dev/null || echo "No .a files found"
+        
+        # Verify build - check multiple possible locations
+        CRYPTO_LIB=""
+        SSL_LIB=""
+        
+        # Check standard locations
+        if [ -f "crypto/libcrypto.a" ]; then
+            CRYPTO_LIB="$(pwd)/crypto/libcrypto.a"
+        elif [ -f "libcrypto.a" ]; then
+            CRYPTO_LIB="$(pwd)/libcrypto.a"
+        else
+            # Search for it
+            CRYPTO_LIB=$(find . -name "libcrypto.a" -type f | head -1)
+        fi
+        
+        if [ -f "ssl/libssl.a" ]; then
+            SSL_LIB="$(pwd)/ssl/libssl.a"
+        elif [ -f "libssl.a" ]; then
+            SSL_LIB="$(pwd)/libssl.a"
+        else
+            # Search for it
+            SSL_LIB=$(find . -name "libssl.a" -type f | head -1)
+        fi
+        
+        if [ -z "$CRYPTO_LIB" ] || [ -z "$SSL_LIB" ]; then
+            echo "❌ Build failed - libraries not found"
+            echo "Searched in: $(pwd)"
+            echo ""
+            echo "Directory structure:"
+            find . -type f -name "*.a" -o -name "libcrypto*" -o -name "libssl*" 2>/dev/null | head -20
+            exit 1
+        fi
+        
+        echo "✅ BoringSSL build complete for $ABI"
+        echo "📦 Libraries:"
+        ls -lh "$CRYPTO_LIB" "$SSL_LIB"
+        
         # Save paths for later steps
-        echo "BORINGSSL_CRYPTO=$(realpath crypto/libcrypto.a)" >> $GITHUB_ENV
-        echo "BORINGSSL_SSL=$(realpath ssl/libssl.a)" >> $GITHUB_ENV
+        echo "BORINGSSL_CRYPTO=$(realpath "$CRYPTO_LIB")" >> $GITHUB_ENV
+        echo "BORINGSSL_SSL=$(realpath "$SSL_LIB")" >> $GITHUB_ENV
         echo "BORINGSSL_INCLUDE=$(realpath ../include)" >> $GITHUB_ENV
         
         cd ${{ github.workspace }}
+
 
     - name: Download xray-patches
       run: |
