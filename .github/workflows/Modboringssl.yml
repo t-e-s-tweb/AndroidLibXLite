@@ -251,6 +251,55 @@ jobs:
         
         echo "📂 Available patches:"
         ls -la xray-patches/
+    - name: Fix handshake trace patch
+      run: |
+        echo "🔧 Fixing 007-boringssl-handshake-trace.patch for current Xray-core..."
+        
+        PATCH_FILE="xray-patches/007-boringssl-handshake-trace.patch"
+        
+        # Delete old patch if exists
+        rm -f "$PATCH_FILE"
+        
+        # Create new patch with correct line numbers
+        cat > "$PATCH_FILE" << 'EOF'
+        diff --git a/transport/internet/tls/config.go b/transport/internet/tls/config.go
+        index 90427b8..8657214 100644
+        --- a/transport/internet/tls/config.go
+        +++ b/transport/internet/tls/config.go
+        @@ -566,3 +566,30 @@ func verifyChain(certs []*x509.Certificate, pinnedPeerCertSha256 [][]byte) (veri
+          	}
+          	return certNotFound, nil
+          }
+        +
+        +// EnableHandshakeTrace enables debug logging for TLS handshakes when tlsSettings is active
+        +func EnableHandshakeTrace(config *tls.Config) {
+        +	if config == nil {
+        +		return
+        +	}
+        +
+        +	// Set log level to debug for handshake tracing
+        +	// This will log: "crypto/tls: handshake start" and "crypto/tls: handshake done"
+        +	config.MinVersion = tls.VersionTLS12 // Ensure TLS 1.2+
+        +
+        +	// Add custom handshake hook for logging
+        +	originalGetCertificate := config.GetCertificate
+        +	config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+        +		errors.LogInfo(context.Background(), "[TLS] Handshake start: serverName=", clientHello.ServerName, ", supportedVersions=", clientHello.SupportedVersions)
+        +		if originalGetCertificate != nil {
+        +			cert, err := originalGetCertificate(clientHello)
+        +			if err != nil {
+        +				errors.LogErrorInner(context.Background(), err, "[TLS] Handshake failed")
+        +				return nil, err
+        +			}
+        +			errors.LogInfo(context.Background(), "[TLS] Handshake done: certificate selected")
+        +			return cert, nil
+        +		}
+        +		return nil, nil
+        +	}
+        +}
+        EOF
+        
+        echo "✅ Created fixed patch at $PATCH_FILE"
 
     - name: Prepare Xray-core
       run: |
