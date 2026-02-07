@@ -1,4 +1,4 @@
-name: Build mod optimise v6
+name: Build mod optimise v6 boringssl
 
 on:
   workflow_dispatch:
@@ -19,104 +19,18 @@ on:
       merge_dns:
         description: 'merge DNS commit (0 = none)'
         required: false
-        default: '0'  # Updated to support 16KB page alignment
+        default: '0'
         
  
 jobs:
-  build-boringssl:
-    name: Build BoringSSL
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        abi: [arm64-v8a, x86_64]
-        include:
-          - abi: arm64-v8a
-            toolchain: aarch64-linux-android24
-            cmake_arch: arm64-v8a
-          - abi: x86_64
-            toolchain: x86_64-linux-android24
-            cmake_arch: x86_64
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.0
-        with:
-          submodules: false
-
-      - name: Setup NDK
-        run: |
-          wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
-          unzip -q android-ndk.zip
-          rm android-ndk.zip
-          NDK_HOME=$(realpath android-ndk-r28c)
-          echo "NDK_HOME=$NDK_HOME" >> $GITHUB_ENV
-          echo "NDK_HOME=$NDK_HOME" >> $GITHUB_OUTPUT
-
-      - name: Install Build Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build cmake
-
-      - name: Build BoringSSL
-        run: |
-          echo "🔧 Building BoringSSL for ${{ matrix.abi }}..."
-          
-          # Clone BoringSSL (shallow clone for speed)
-          git clone --depth=1 https://github.com/google/boringssl.git
-          cd boringssl
-          
-          BORINGSSL_DIR=$(pwd)
-          BUILD_DIR="build_${{ matrix.abi }}"
-          mkdir -p "$BUILD_DIR"
-          cd "$BUILD_DIR"
-          
-          # Configure with CMake
-          cmake .. \
-            -DCMAKE_SYSTEM_NAME=Android \
-            -DCMAKE_SYSTEM_VERSION=24 \
-            -DANDROID_ABI=${{ matrix.cmake_arch }} \
-            -DCMAKE_ANDROID_ARCH_ABI=${{ matrix.cmake_arch }} \
-            -DCMAKE_ANDROID_NDK=$NDK_HOME \
-            -DCMAKE_TOOLCHAIN_FILE=$NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DOPENSSL_SMALL=1 \
-            -DOPENSSL_NO_DEPRECATED=1 \
-            -DBUILD_SHARED_LIBS=OFF \
-            -GNinja
-          
-          # Build
-          ninja -j$(nproc)
-          
-          # Verify build
-          if [ ! -f "crypto/libcrypto.a" ] || [ ! -f "ssl/libssl.a" ]; then
-            echo "❌ BoringSSL build failed for ${{ matrix.abi }}"
-            exit 1
-          fi
-          
-          echo "✅ BoringSSL built for ${{ matrix.abi }}"
-          ls -lh crypto/libcrypto.a ssl/libssl.a
-          
-          # Save paths for next job
-          echo "BORINGSSL_DIR=$BORINGSSL_DIR" >> $GITHUB_ENV
-
-      - name: Upload BoringSSL Artifacts
-        uses: actions/upload-artifact@v6.0.0
-        with:
-          name: boringssl-${{ matrix.abi }}
-          path: |
-            boringssl/build_${{ matrix.abi }}/crypto/libcrypto.a
-            boringssl/build_${{ matrix.abi }}/ssl/libssl.a
-            boringssl/include
-          retention-days: 1
-
   build:
-    name: Build Xray with Gomobile
     runs-on: ubuntu-latest
-    needs: build-boringssl
     steps:
 
     - name: Checkout repository
       uses: actions/checkout@v6.0.0
+      with:
+        submodules: false
       
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
@@ -152,26 +66,175 @@ jobs:
           --install "ndk;28.2.13676358"
         echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
 
-    - name: Download BoringSSL Artifacts
-      uses: actions/download-artifact@v6.0.0
-      with:
-        path: boringssl-artifacts
-        pattern: boringssl-*
-
-    - name: Verify BoringSSL Artifacts
+    - name: Setup BoringSSL Source
       run: |
-        echo "🔍 Verifying downloaded BoringSSL artifacts..."
-        ls -la boringssl-artifacts/
+        echo "🔧 Setting up BoringSSL for local development..."
         
-        # Organize artifacts by ABI
-        for abi in arm64-v8a x86_64; do
-          if [ -d "boringssl-artifacts/boringssl-$abi" ]; then
-            echo "✅ Found artifacts for $abi"
-            ls -la boringssl-artifacts/boringssl-$abi/
-          else
-            echo "⚠️  No artifacts found for $abi"
-          fi
-        done
+        BORINGSSL_DIR="app/src/main/jni/perf-net/third_party/boringssl"
+        
+        # Check if BoringSSL is already initialized
+        if [ -d "$BORINGSSL_DIR" ] && [ -f "$BORINGSSL_DIR/CMakeLists.txt" ]; then
+            echo "✅ BoringSSL source already exists at $BORINGSSL_DIR"
+        
+            # Verify headers are present
+            if [ -f "$BORINGSSL_DIR/include/openssl/ssl.h" ]; then
+                echo "✅ BoringSSL headers verified"
+        
+                # Get commit hash for reference
+                cd "$BORINGSSL_DIR"
+                COMMIT=$(git rev-parse HEAD | cut -c 1-12)
+                echo "📌 BoringSSL commit: $COMMIT"
+                cd - > /dev/null
+        
+                echo ""
+                echo "BoringSSL is ready for use!"
+                exit 0
+            else
+                echo "⚠️  BoringSSL source exists but headers are missing"
+                echo "   Reinitializing submodule..."
+            fi
+        fi
+        
+        # Initialize BoringSSL as a git submodule
+        echo "📦 Initializing BoringSSL submodule..."
+        echo "   This may take a few minutes..."
+        
+        # First, make sure submodule is registered
+        if ! git config -f .gitmodules --get submodule.app/src/main/jni/perf-net/third_party/boringssl.url > /dev/null 2>&1; then
+            echo "⚠️  BoringSSL submodule not found in .gitmodules"
+            echo "   Adding BoringSSL as a submodule..."
+        
+            # Remove directory if it exists but is not a proper submodule
+            if [ -d "$BORINGSSL_DIR" ]; then
+                rm -rf "$BORINGSSL_DIR"
+            fi
+        
+            # Add as submodule
+            git submodule add --force https://boringssl.googlesource.com/boringssl "$BORINGSSL_DIR" || {
+                echo "⚠️  Failed to add from googlesource, trying GitHub mirror..."
+                git submodule add --force https://github.com/google/boringssl.git "$BORINGSSL_DIR" || {
+                    echo "❌ Failed to add BoringSSL submodule"
+                    exit 1
+                }
+            }
+        fi
+        
+        # Initialize and update the submodule
+        if git submodule update --init --depth 1 "$BORINGSSL_DIR" 2>&1; then
+            echo "✅ BoringSSL submodule initialized successfully"
+        else
+            echo "⚠️  Submodule init failed, trying alternative method..."
+        
+            # Try without depth limitation
+            if git submodule update --init "$BORINGSSL_DIR" 2>&1; then
+                echo "✅ BoringSSL submodule initialized successfully"
+            else
+                echo "❌ Failed to initialize BoringSSL submodule"
+                echo "   Please check your internet connection and try again"
+                exit 1
+            fi
+        fi
+        
+        # Verify CMakeLists.txt exists
+        if [ ! -f "$BORINGSSL_DIR/CMakeLists.txt" ]; then
+            echo "❌ BoringSSL CMakeLists.txt not found after initialization!"
+            echo "   This indicates an incomplete or corrupted clone"
+            exit 1
+        fi
+        
+        # Verify headers exist
+        if [ ! -f "$BORINGSSL_DIR/include/openssl/ssl.h" ]; then
+            echo "❌ BoringSSL headers not found after initialization!"
+            echo "   This indicates an incomplete or corrupted clone"
+            exit 1
+        fi
+        
+        # Get commit hash for reference
+        cd "$BORINGSSL_DIR"
+        COMMIT=$(git rev-parse HEAD | cut -c 1-12)
+        echo "✅ BoringSSL pinned to commit: $COMMIT"
+        cd - > /dev/null
+        
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ BoringSSL Setup Complete!"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    - name: Build BoringSSL
+      run: |
+        echo "🔧 Building BoringSSL for arm64-v8a..."
+        
+        ABI="arm64-v8a"
+        NDK_HOME="$ANDROID_NDK_HOME"
+        
+        # ABI configuration
+        TOOLCHAIN="aarch64-linux-android24"
+        CMAKE_ARCH="arm64-v8a"
+        
+        echo "NDK: $NDK_HOME"
+        echo "Toolchain: $TOOLCHAIN"
+        echo "✅ Detected ARM64 with crypto extensions support"
+        
+        # Find BoringSSL directory
+        BORINGSSL_DIR="app/src/main/jni/perf-net/third_party/boringssl"
+        if [ ! -d "$BORINGSSL_DIR" ]; then
+            echo "❌ BoringSSL directory not found: $BORINGSSL_DIR"
+            exit 1
+        fi
+        
+        cd "$BORINGSSL_DIR"
+        
+        # Setup toolchain
+        TOOLCHAIN_DIR="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+        export PATH=$TOOLCHAIN_DIR/bin:$PATH
+        export CC=$TOOLCHAIN_DIR/bin/$TOOLCHAIN-clang
+        export CXX=$TOOLCHAIN_DIR/bin/$TOOLCHAIN-clang++
+        export AR=$TOOLCHAIN_DIR/bin/llvm-ar
+        export RANLIB=$TOOLCHAIN_DIR/bin/llvm-ranlib
+        export STRIP=$TOOLCHAIN_DIR/bin/llvm-strip
+        export ANDROID_NDK_HOME=$NDK_HOME
+        export ANDROID_NDK_ROOT=$NDK_HOME
+        
+        # Create build directory
+        BUILD_DIR="build_$ABI"
+        mkdir -p "$BUILD_DIR"
+        cd "$BUILD_DIR"
+        
+        # Configure BoringSSL with CMake
+        echo "📦 Configuring BoringSSL with CMake..."
+        cmake .. \
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DCMAKE_SYSTEM_VERSION=24 \
+            -DCMAKE_ANDROID_ARCH_ABI=$CMAKE_ARCH \
+            -DCMAKE_ANDROID_NDK=$NDK_HOME \
+            -DCMAKE_TOOLCHAIN_FILE=$NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOPENSSL_SMALL=1 \
+            -DOPENSSL_NO_DEPRECATED=1 \
+            -DOPENSSL_NO_ASM=0 \
+            -DBUILD_SHARED_LIBS=OFF \
+            -GNinja
+        
+        # Build
+        echo "🔨 Building BoringSSL..."
+        ninja -j$(nproc)
+        
+        # Verify build
+        if [ -f "crypto/libcrypto.a" ] && [ -f "ssl/libssl.a" ]; then
+            echo "✅ BoringSSL build complete for $ABI"
+            echo "📦 Libraries:"
+            ls -lh crypto/libcrypto.a ssl/libssl.a
+        else
+            echo "❌ Build failed - libraries not found"
+            exit 1
+        fi
+        
+        # Save paths for later steps
+        echo "BORINGSSL_CRYPTO=$(realpath crypto/libcrypto.a)" >> $GITHUB_ENV
+        echo "BORINGSSL_SSL=$(realpath ssl/libssl.a)" >> $GITHUB_ENV
+        echo "BORINGSSL_INCLUDE=$(realpath ../include)" >> $GITHUB_ENV
+        
+        cd ${{ github.workspace }}
 
     - name: Download xray-patches
       run: |
@@ -189,7 +252,7 @@ jobs:
         echo "📂 Available patches:"
         ls -la xray-patches/
 
-    - name: Build
+    - name: Build Xray with Gomobile
       run: |
         mkdir -p assets data
         bash gen_assets.sh download
@@ -269,7 +332,7 @@ jobs:
           done
         fi          
                 
-        # Apply BoringSSL patches (downloaded in previous step)
+        # Apply BoringSSL patches
         echo "📝 Applying BoringSSL patches to Xray-core..."
         if [ -d "$GITHUB_WORKSPACE/xray-patches" ]; then
           for patch in $GITHUB_WORKSPACE/xray-patches/*.patch; do
@@ -310,25 +373,20 @@ jobs:
         NDK_TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
         NDK_SYSROOT="$NDK_TOOLCHAIN/sysroot"
         
-        # Primary ABI (arm64-v8a) - BoringSSL paths
-        BORINGSSL_BASE="$GITHUB_WORKSPACE/boringssl-artifacts/boringssl-arm64-v8a"
-        BORINGSSL_CRYPTO="$BORINGSSL_BASE/crypto/libcrypto.a"
-        BORINGSSL_SSL="$BORINGSSL_BASE/ssl/libssl.a"
-        BORINGSSL_INCLUDE="$BORINGSSL_BASE/include"
-        
-        # Verify BoringSSL files exist
-        if [ ! -f "$BORINGSSL_CRYPTO" ] || [ ! -f "$BORINGSSL_SSL" ]; then
-          echo "❌ BoringSSL libraries not found!"
-          echo "Looking for: $BORINGSSL_CRYPTO"
-          echo "Looking for: $BORINGSSL_SSL"
-          find $GITHUB_WORKSPACE/boringssl-artifacts -name "*.a" -type f
+        # Verify BoringSSL env vars are set
+        if [ -z "$BORINGSSL_CRYPTO" ] || [ -z "$BORINGSSL_SSL" ] || [ -z "$BORINGSSL_INCLUDE" ]; then
+          echo "❌ BoringSSL environment variables not set!"
+          echo "BORINGSSL_CRYPTO: $BORINGSSL_CRYPTO"
+          echo "BORINGSSL_SSL: $BORINGSSL_SSL"
+          echo "BORINGSSL_INCLUDE: $BORINGSSL_INCLUDE"
           exit 1
         fi
         
-        echo "✅ BoringSSL libraries found:"
+        echo "✅ BoringSSL libraries:"
         ls -lh "$BORINGSSL_CRYPTO" "$BORINGSSL_SSL"
+        echo "✅ BoringSSL include: $BORINGSSL_INCLUDE"
 
-        # Set compiler for arm64-v8a (primary target for gomobile)
+        # Set compiler for arm64-v8a
         export CC="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang"
         export CXX="$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang++"
         export AR="$NDK_TOOLCHAIN/bin/llvm-ar"
@@ -338,7 +396,7 @@ jobs:
         export CGO_CFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
         export CGO_CXXFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -fomit-frame-pointer -I$BORINGSSL_INCLUDE --sysroot=$NDK_SYSROOT"
         
-        # Hybrid static/dynamic linking (from working workflow)
+        # Hybrid static/dynamic linking
         export CGO_LDFLAGS="\
           -Wl,-Bstatic \
           -L$(dirname $BORINGSSL_CRYPTO) -L$(dirname $BORINGSSL_SSL) \
