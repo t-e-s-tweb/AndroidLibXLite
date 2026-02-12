@@ -207,9 +207,9 @@ jobs:
         export CGO_CFLAGS_ALLOW="-march.*|-mcpu.*|-mtune.*|-f.*|-W.*|-D.*|-O.*"
         export CGO_CXXFLAGS_ALLOW="-march.*|-mcpu.*|-mtune.*|-f.*|-W.*|-D.*|-O.*"
         export CGO_LDFLAGS_ALLOW="-Wl,.*|-f.*|-z.*|-s"
-        export CGO_CFLAGS="-O3 -ffunction-sections -fdata-sections -DNDEBUG"
-        export CGO_CXXFLAGS="-O3 -ffunction-sections -fdata-sections -DNDEBUG"
-        export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,--gc-sections -Wl,-O3 -Wl,--hash-style=gnu"        
+        export CGO_CFLAGS="-O2"
+        export CGO_CXXFLAGS="-O2"
+        export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-O2 -Wl,--hash-style=gnu"        
          
         echo "=== BUILD ENV ==="
         echo "GOOS=$GOOS"
