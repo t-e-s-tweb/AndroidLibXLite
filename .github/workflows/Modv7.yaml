@@ -117,22 +117,23 @@ jobs:
          git fetch j2rong4cn main
 
          DNS_HOST_SHA=$(git log j2rong4cn/main --grep="$DNS_MSG" --format="%H" -n 1)
-         QUIC_SHA=$(git log j2rong4cn/main --grep="$QUIC_MSG" --format="%H" -n 1)
-
          if [ -n "$DNS_HOST_SHA" ]; then
           echo "Found commit: $DNS_HOST_SHA"
           git cherry-pick "$DNS_HOST_SHA" || true
          else
           echo "$DNS_MSG"
          fi
-        fi
+         fi
+         QUIC_SHA=$(git log j2rong4cn/main --grep="$QUIC_MSG" --format="%H" -n 1)
+
+         
          if [ -n "$QUIC_SHA" ]; then
           echo "Found commit: $QUIC_SHA"
           git cherry-pick "$QUIC_SHA" || true
          else
           echo "$QUIC_MSG"
          fi
-        fi
+         fi
         
         COUNT=${{ github.event.inputs.pr_count }}
         IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
