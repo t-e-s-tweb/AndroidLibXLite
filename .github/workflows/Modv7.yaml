@@ -124,6 +124,7 @@ jobs:
            echo "$DNS_MSG"
           fi
          fi
+         
          QUIC_SHA=$(git log j2rong4cn/main --grep="$QUIC_MSG" --format="%H" -n 1)
 
          
