@@ -200,12 +200,11 @@ jobs:
           
           # Configure cargo for Android
           mkdir -p ~/.cargo
-          cat > ~/.cargo/config.toml << 'EOF'
-          [target.aarch64-linux-android]
-          linker = "aarch64-linux-android21-clang"
-          ar = "llvm-ar"
-          rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384"]
-          EOF
+          echo '[target.aarch64-linux-android]' > ~/.cargo/config.toml
+          echo 'linker = "aarch64-linux-android21-clang"' >> ~/.cargo/config.toml
+          echo 'ar = "llvm-ar"' >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384"]' >> ~/.cargo/config.toml
+
           
           # Add Android target and build
           rustup target add aarch64-linux-android
