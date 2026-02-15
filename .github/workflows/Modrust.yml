@@ -226,7 +226,12 @@ jobs:
         fi
         
         cd ${{ github.workspace }}/
-
+        NDK_SYSROOT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+        LIB_DIR="$NDK_SYSROOT/usr/lib/aarch64-linux-android"
+        mkdir -p "$LIB_DIR" "$LIB_DIR/21"
+        echo "INPUT(-lc)" > "$LIB_DIR/libpthread.so"
+        cp "$LIB_DIR/libpthread.so" "$LIB_DIR/21/"
+        echo "✅ Dummy libpthread.so created in $LIB_DIR"
         echo "Updating go.mod to use local xray-core..."
         go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
 
