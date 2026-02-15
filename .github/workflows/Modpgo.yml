@@ -224,7 +224,7 @@ jobs:
         go tool pprof -top main/default.pgo >/dev/null
 
         echo "PGO profile verification complete"
-         ${{ github.workspace }}/
+        cd ${{ github.workspace }}/
         
 
         
