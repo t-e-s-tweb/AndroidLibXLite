@@ -42,7 +42,7 @@ jobs:
           check-latest: true
 
     - name: Setup Rust toolchain
-      uses: dtolnay/rust-action@master
+      uses: dtolnay/rust-toolchain@master
       with:
         targets: aarch64-linux-android
 
