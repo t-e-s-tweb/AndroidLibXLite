@@ -209,9 +209,7 @@ jobs:
           # Add Android target and build
           rustup target add aarch64-linux-android
           cargo build --release --target aarch64-linux-android
-          
-          # Also build host version for the linker path
-          cargo build --release
+        
           
           echo "Rust build complete. Libraries found:"
           find "$RUST_PROJECT_PATH" -name "libxray_rust*.a" -o -name "libxray_rust*.so" 2>/dev/null
