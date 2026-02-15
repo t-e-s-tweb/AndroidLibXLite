@@ -260,14 +260,16 @@ jobs:
         export CGO_CFLAGS="-O2"
         export CGO_CXXFLAGS="-O2"
         
-        # Set library paths for the linker
-        if [ -n "$RUST_LIB_PATH" ]; then
-          export CGO_LDFLAGS="-L${RUST_LIB_PATH} -L${RUST_ANDROID_LIB_PATH} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-O2 -Wl,--hash-style=gnu"
-          export LIBRARY_PATH="${RUST_LIB_PATH}:${RUST_ANDROID_LIB_PATH}:$LIBRARY_PATH"
-        else
-          export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-O2 -Wl,--hash-style=gnu"
-        fi
         
+        # Set library paths for the linker - Android only
+        RUST_LIB_DIR="${XRAY_PATH}/rust/xray-rust/target/aarch64-linux-android/release"
+        echo "Setting Rust library path: ${RUST_LIB_DIR}"
+        ls -la "${RUST_LIB_DIR}/libxray_rust.a" || echo "Warning: libxray_rust.a not found!"
+        
+        export CGO_LDFLAGS="-L${RUST_LIB_DIR} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-O2 -Wl,--hash-style=gnu"
+        export LIBRARY_PATH="${RUST_LIB_DIR}:$LIBRARY_PATH"
+        export LD_LIBRARY_PATH="${RUST_LIB_DIR}:$LD_LIBRARY_PATH"
+
         echo "=== BUILD ENV ==="
         echo "GOOS=$GOOS"
         echo "GOARCH=$GOARCH"
