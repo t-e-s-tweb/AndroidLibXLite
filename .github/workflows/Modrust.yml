@@ -285,7 +285,8 @@ jobs:
           echo "⚠️ libxray_rust.a not found, build may fail"
           find "$XRAY_PATH" -name "libxray_rust*" 2>/dev/null || true
         fi
-        
+        # Fix: Android doesn't have libpthread separately
+        export CGO_LDFLAGS="$CGO_LDFLAGS -Wl,--allow-shlib-undefined"
         gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
   
         
