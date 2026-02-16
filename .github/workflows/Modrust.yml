@@ -205,7 +205,7 @@ jobs:
           echo '[target.aarch64-linux-android]' > ~/.cargo/config.toml
           echo 'linker = "aarch64-linux-android21-clang"' >> ~/.cargo/config.toml
           echo 'ar = "llvm-ar"' >> ~/.cargo/config.toml
-          echo 'rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--unresolved-symbols=ignore-in-shared-libs"]' >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384"]' >> ~/.cargo/config.toml
 
           
           # Add Android target and build
@@ -302,7 +302,7 @@ jobs:
           find "$XRAY_PATH" -name "libxray_rust*" 2>/dev/null || true
         fi
         # Fix: Android doesn't have libpthread separately
-        export CGO_LDFLAGS="$CGO_LDFLAGS -Wl,--allow-shlib-undefined"
+        # export CGO_LDFLAGS="$CGO_LDFLAGS -Wl,--allow-shlib-undefined"
         export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
   
