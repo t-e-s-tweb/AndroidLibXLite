@@ -177,6 +177,8 @@ jobs:
         bash xmuxpatch.sh
         wget -qO "$XRAY_PATH/main/pgo_generate_test.go" \
         https://raw.githubusercontent.com/Mit0chrondr1a/Xray-core/refs/heads/perf/main/pgo_generate_test.go
+        wget -qO "$XRAY_PATH/main/default.pgo" \
+        https://github.com/t-e-s-tweb/lists/releases/download/main/default.pgo
 
         # Build the Rust library before going back to workspace
         echo "Building Rust library (libxray_rust)..."
@@ -296,16 +298,7 @@ jobs:
         # Fix: Android doesn't have libpthread separately
         # export CGO_LDFLAGS="$CGO_LDFLAGS -Wl,--allow-shlib-undefined"
         export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
-        cd "$XRAY_PATH"
-        #mkdir -p main
-        echo "Running representative proxy workload benchmark..."
-         go test -run=^$ \
-          -bench=BenchmarkPGOWorkload \
-          -benchtime=15s \
-          -count=1 \
-          -cpuprofile=main/default.pgo \
-          ./main/
-        cd ${{ github.workspace }}/
+        
         gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
   
         
