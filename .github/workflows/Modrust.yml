@@ -177,7 +177,18 @@ jobs:
         bash xmuxpatch.sh
         wget -qO "$XRAY_PATH/main/pgo_generate_test.go" \
         https://raw.githubusercontent.com/Mit0chrondr1a/Xray-core/refs/heads/perf/main/pgo_generate_test.go
-        
+
+        echo "Running representative proxy workload benchmark..."
+        go test -run=^$ \
+          -bench=BenchmarkPGOWorkload \
+          -benchtime=15s \
+          -count=1 \
+          -cpuprofile=main/default.pgo \
+          ./main/
+        echo "PGO profile generated:"
+        ls -lh main/default.pgo
+        echo "Verifying profile..."
+        go tool pprof -top main/default.pgo >/dev/null
         # Build the Rust library before going back to workspace
         echo "Building Rust library (libxray_rust)..."
         export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
