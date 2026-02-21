@@ -101,7 +101,9 @@ jobs:
         go mod tidy
         cd $GITHUB_WORKSPACE
         go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
+        go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
         cd "$XRAY_PATH"
+        #go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=default.pgo ./main/
         # Verify we're on the rust branch
         git branch -a
         git log --oneline -5
@@ -242,8 +244,9 @@ jobs:
         echo "Updating go.mod to use local xray-core..."
         #go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
         #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
-        go mod download all
+        go mod download
         go list -m all | grep gvisor
+        go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=main/default.pgo ./main/
 
         
         
@@ -301,7 +304,7 @@ jobs:
         cd $XRAY_PATH
         go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
         go mod tidy
-        go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=main/default.pgo ./main/
+        #go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=main/default.pgo ./main/
         export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         cd ${{ github.workspace }}/
         gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
