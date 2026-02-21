@@ -306,6 +306,7 @@ jobs:
         #go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=main/default.pgo ./main/
         export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         wget -O $XRAY_PATH/main/default.pgo https://github.com/t-e-s-tweb/lists/releases/download/main/default.pgo
+        cd $GITHUB_WORKSPACE
         gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
   
         
