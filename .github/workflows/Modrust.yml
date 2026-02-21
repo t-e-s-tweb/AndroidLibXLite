@@ -297,7 +297,6 @@ jobs:
         # Fix: Android doesn't have libpthread separately
         # export CGO_LDFLAGS="$CGO_LDFLAGS -Wl,--allow-shlib-undefined"
         cd $XRAY_PATH
-        cd main
         go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=default.pgo ./main/
         export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         cd
