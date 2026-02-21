@@ -97,7 +97,11 @@ jobs:
         # Clone the Rust-enabled Xray-core from Mit0chrondr1a
         git clone -b rust https://github.com/Mit0chrondr1a/Xray-core.git "$XRAY_PATH"
         cd "$XRAY_PATH"
-        
+        go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
+        go mod tidy
+        cd $GITHUB_WORKSPACE
+        go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
+        cd "$XRAY_PATH"
         # Verify we're on the rust branch
         git branch -a
         git log --oneline -5
@@ -236,11 +240,10 @@ jobs:
         cp "$LIB_DIR/libpthread.so" "$LIB_DIR/21/"
         echo "✅ Dummy libpthread.so created in $LIB_DIR"
         echo "Updating go.mod to use local xray-core..."
-        go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
-        go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
-        go get golang.org/x/mobile@latest
+        #go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
+        #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
         go mod download all
-        
+        go list -m all | grep gvisor
 
         
         
