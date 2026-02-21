@@ -252,7 +252,6 @@ jobs:
         export GOEXPERIMENT="runtimefreegc,sizespecializedmalloc,greenteagc,jsonv2,newinliner,heapminimum512kib"
         echo "Initializing gomobile..."
         gomobile init -v
-        go mod tidy
 
 
        
@@ -299,7 +298,7 @@ jobs:
         cd $XRAY_PATH
         go test -bench=BenchmarkPGOWorkload -benchtime=10s -cpuprofile=main/default.pgo ./main/
         export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
-        cd
+        cd ${{ github.workspace }}/
         gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
   
         
