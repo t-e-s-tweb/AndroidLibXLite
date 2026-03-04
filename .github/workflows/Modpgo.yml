@@ -209,21 +209,21 @@ jobs:
 
         mkdir -p main
 
-        echo "Running representative proxy workload benchmark..."
-        go test -run=^$ \
-          -bench=BenchmarkPGOWorkload \
-          -benchtime=15s \
-          -count=1 \
-          -cpuprofile=main/default.pgo \
-          ./main/
+        #echo "Running representative proxy workload benchmark..."
+        #go test -run=^$ \
+         # -bench=BenchmarkPGOWorkload \
+         # -benchtime=15s \
+        #  -count=1 \
+        #  -cpuprofile=main/default.pgo \
+        #  ./main/
 
-        echo "PGO profile generated:"
-        ls -lh main/default.pgo
+        #echo "PGO profile generated:"
+        #ls -lh main/default.pgo
 
-        echo "Verifying profile..."
-        go tool pprof -top main/default.pgo >/dev/null
+        #echo "Verifying profile..."
+        #go tool pprof -top main/default.pgo >/dev/null
 
-        echo "PGO profile verification complete"
+        #echo "PGO profile verification complete"
         cd ${{ github.workspace }}/
         
 
@@ -236,7 +236,7 @@ jobs:
         export CGO_ENABLED=1
         export GOEXPERIMENT="runtimefreegc,sizespecializedmalloc,greenteagc,jsonv2,newinliner,heapminimum512kib"
         echo "Initializing gomobile..."
-        export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
+        #export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         gomobile init -v
         go mod tidy
 
