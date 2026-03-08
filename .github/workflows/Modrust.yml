@@ -224,6 +224,7 @@ jobs:
           # Add Android target and build
           rustup target add aarch64-linux-android
           cargo build --release --target aarch64-linux-android
+          cargo fix --lib -p xray-rust
         
           
           echo "Rust build complete. Libraries found:"
