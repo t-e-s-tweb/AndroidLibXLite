@@ -206,6 +206,7 @@ jobs:
         echo "=============================="
 
         cd "$XRAY_PATH"
+        go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
 
         mkdir -p main
 
