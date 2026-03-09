@@ -180,8 +180,8 @@ jobs:
         wget https://raw.githubusercontent.com/t-e-s-tweb/v-rules/refs/heads/main/xmuxpatch.sh
         bash xmuxpatch.sh
         #wget https://raw.githubusercontent.com/Mit0chrondr1a/Xray-core/refs/heads/perf/main/pgo_generate_test.
-        wget -qO "$XRAY_PATH/main/pgo_generate_test.go" \
-        https://raw.githubusercontent.com/Mit0chrondr1a/Xray-core/refs/heads/perf/main/pgo_generate_test.go
+        wget -qO "$XRAY_PATH/main/default.pgo" \
+        https://github.com/t-e-s-tweb/lists/releases/download/main/default.pgo
 
         echo "Verifying..."
         ls -lh "$XRAY_PATH/main/pgo_generate_test.go"
@@ -236,7 +236,7 @@ jobs:
         export CGO_ENABLED=1
         export GOEXPERIMENT="runtimefreegc,sizespecializedmalloc,greenteagc,jsonv2,newinliner,heapminimum512kib"
         echo "Initializing gomobile..."
-        #export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
+        export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         gomobile init -v
         go mod tidy
 
