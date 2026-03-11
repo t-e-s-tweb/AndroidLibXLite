@@ -180,15 +180,15 @@ jobs:
         wget https://raw.githubusercontent.com/t-e-s-tweb/v-rules/refs/heads/main/xmuxpatch.sh
         bash xmuxpatch.sh
         #wget https://raw.githubusercontent.com/Mit0chrondr1a/Xray-core/refs/heads/perf/main/pgo_generate_test.
-        wget -qO "$XRAY_PATH/main/default.pgo" \
-        https://github.com/t-e-s-tweb/lists/releases/download/main/default.pgo
+        #wget -qO "$XRAY_PATH/main/default.pgo" \
+        #https://github.com/t-e-s-tweb/lists/releases/download/main/default.pgo
 
         echo "Verifying..."
         #ls -lh "$XRAY_PATH/main/pgo_generate_test.go"
         cd ${{ github.workspace }}/
         echo "Updating go.mod to use local xray-core..."
         go mod edit -replace=github.com/xtls/xray-core="$XRAY_PATH"
-        go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
+        #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
 
         #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20250606001031-fa4c4dd86b43
           
@@ -210,13 +210,13 @@ jobs:
 
         mkdir -p main
 
-        #echo "Running representative proxy workload benchmark..."
-        #go test -run=^$ \
-         # -bench=BenchmarkPGOWorkload \
-         # -benchtime=15s \
-        #  -count=1 \
-        #  -cpuprofile=main/default.pgo \
-        #  ./main/
+        echo "Running representative proxy workload benchmark..."
+        go test -run=^$ \
+          -bench=BenchmarkPGOWorkload \
+          -benchtime=5s \
+          -count=1 \
+          -cpuprofile=main/default.pgo \
+          ./main/
 
         #echo "PGO profile generated:"
         #ls -lh main/default.pgo
@@ -237,7 +237,7 @@ jobs:
         export CGO_ENABLED=1
         export GOEXPERIMENT="runtimefreegc,sizespecializedmalloc,greenteagc,jsonv2,newinliner,heapminimum512kib"
         echo "Initializing gomobile..."
-        #export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
+        export GOFLAGS="-pgo=$XRAY_PATH/main/default.pgo"
         gomobile init -v
         go mod tidy
 
