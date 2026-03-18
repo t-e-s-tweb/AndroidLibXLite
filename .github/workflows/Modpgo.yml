@@ -133,16 +133,16 @@ jobs:
            git cherry-pick "$QUIC_SHA" || true
           else
            echo "$QUIC_MSG"
-          fi
          fi
+         
          TLS_SHA=$(git log j2rong4cn/main --grep="$TLS_MSG" --format="%H" -n 1)
          if [ -n "$TLS_SHA" ]; then
            echo "Found commit: $TLS_SHA"
            git cherry-pick "$TLS_SHA" || true
           else
            echo "$TLS_MSG"
-          fi
          fi
+        fi
         COUNT=${{ github.event.inputs.pr_count }}
         IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
           for PR_NUM in "${PR_LIST[@]}"; do
