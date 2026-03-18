@@ -112,7 +112,7 @@ jobs:
         if [ "${{ github.event.inputs.merge_dns }}" != "0" ]; then
          DNS_MSG="refactor(dns): streamline query handling and remove redundant deadline logic"
          QUIC_MSG="fix: optimize crypto data handling in SniffQUIC function"
-
+         TLS_MSG="fix(tls): remove redundant check for empty VerifyPeerCertByName values"
          git remote add j2rong4cn https://github.com/j2rong4cn/Xray-core.git
          git fetch j2rong4cn main
 
@@ -135,7 +135,14 @@ jobs:
            echo "$QUIC_MSG"
           fi
          fi
-        
+         TLS_SHA=$(git log j2rong4cn/main --grep="$TLS_MSG" --format="%H" -n 1)
+         if [ -n "$TLS_SHA" ]; then
+           echo "Found commit: $TLS_SHA"
+           git cherry-pick "$TLS_SHA" || true
+          else
+           echo "$TLS_MSG"
+          fi
+         fi
         COUNT=${{ github.event.inputs.pr_count }}
         IFS=',' read -ra PR_LIST <<< "${{ github.event.inputs.merge_prs }}"
           for PR_NUM in "${PR_LIST[@]}"; do
