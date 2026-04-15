@@ -213,8 +213,8 @@ jobs:
         echo "=============================="
 
         cd "$XRAY_PATH"
-        sed -i 's/case "ios":/case "ios", "android":/' common/geodata/domain_matcher.go
-        grep -A 5 "func newDomainMatcherFactory" common/geodata/domain_matcher.go
+        #sed -i 's/case "ios":/case "ios", "android":/' common/geodata/domain_matcher.go
+        #grep -A 5 "func newDomainMatcherFactory" common/geodata/domain_matcher.go
         #go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20260122175437-89a5d21be8f0
 
         mkdir -p main
