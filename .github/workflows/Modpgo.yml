@@ -283,65 +283,7 @@ jobs:
         #gomobile bind -v -x -androidapi 24 -trimpath -gcflags="all=-l=4" -ldflags="-s -w -buildid='' -linkmode external -extldflags=$CGO_LDFLAGS" ./
   
 
-    - name: Strip native libraries in AAR
-      run: |
-       # Setup paths
-        AAR_FILE="libv2ray.aar"
-        EXTRACT_DIR="aar_extract"
-        NDK_STRIP="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
     
-        # Verify AAR exists
-       if [ ! -f "$AAR_FILE" ]; then
-        echo "Error: $AAR_FILE not found!"
-        exit 1
-       fi
-    
-       # Create extraction directory
-       mkdir -p "$EXTRACT_DIR"
-    
-       # Extract AAR (it's just a ZIP)
-       echo "Extracting $AAR_FILE..."
-       unzip -q "$AAR_FILE" -d "$EXTRACT_DIR"
-    
-       # Find and strip all .so files
-       echo "Stripping native libraries..."
-       find "$EXTRACT_DIR" -name "*.so" -type f | while read -r so_file; do
-       arch=$(basename "$(dirname "$so_file")")
-       echo "  Processing [$arch]: $(basename "$so_file")"
-      
-       # Get size before
-       size_before=$(stat -c%s "$so_file" 2>/dev/null || stat -f%z "$so_file" 2>/dev/null)
-      
-       # Strip: --strip-all removes all symbols (same as -s)
-       "$NDK_STRIP" --strip-all "$so_file"
-      
-       # Get size after
-       size_after=$(stat -c%s "$so_file" 2>/dev/null || stat -f%z "$so_file" 2>/dev/null)
-       saved=$((size_before - size_after))
-      
-       echo "    Saved: $saved bytes ($(numfmt --to=iec $saved 2>/dev/null || echo "$saved"))"
-       done
-    
-       # Repackage AAR with maximum compression
-       echo "Repackaging AAR..."
-       cd "$EXTRACT_DIR"
-     
-       # Create new AAR with optimized compression
-       # -X: no extra file attributes (cleaner)
-       # -9: maximum compression
-       zip -r -X -9 "../${AAR_FILE}.tmp" .
-       cd ..
-    
-       # Replace original
-       mv "${AAR_FILE}.tmp" "$AAR_FILE"
-    
-       # Cleanup
-       rm -rf "$EXTRACT_DIR"
-    
-       # Show final result
-       echo "Post-strip AAR size: $(ls -lh $AAR_FILE | awk '{print $5}')"
-
-
     - name: Upload build artifacts
       if: github.event.inputs.release_tag == ''
       uses: actions/upload-artifact@v6.0.0
