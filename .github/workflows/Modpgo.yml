@@ -267,7 +267,7 @@ jobs:
         echo "CC=$CC"
         go env GOOS GOARCH CC CGO_CFLAGS
         echo "=================="
-        gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external" ./
+        gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external -checklinkname=0" ./
         find . -name "*.so" -exec go version -m {} \; | grep -i pgo || echo "❌ PGO NOT APPLIED"
         
         #export CGO_LDFLAGS="-fuse-ld=lld -Wl,-z,separate-loadable-segments -Wl,-z,common-page-size=0x4000 -Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections"
