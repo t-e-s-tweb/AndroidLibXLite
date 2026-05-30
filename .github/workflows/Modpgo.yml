@@ -259,7 +259,7 @@ jobs:
         export CGO_LDFLAGS_ALLOW="-Wl,.*|-f.*|-z.*|-s"
         export CGO_CFLAGS="-O3 -fvisibility=hidden -ffunction-sections -fdata-sections -flto=thin"
         export CGO_CXXFLAGS="-O3"
-        export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-O3 -Wl,--hash-style=gnu -flto=thin -Wl,--gc-sections"        
+        export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-O3 -Wl,--hash-style=gnu -fuse-ld=lld -Wl,--gc-sections -Wl,--icf=all -Wl,-O2 -flto=thin"        
          
         echo "=== BUILD ENV ==="
         echo "GOOS=$GOOS"
@@ -267,7 +267,7 @@ jobs:
         echo "CC=$CC"
         go env GOOS GOARCH CC CGO_CFLAGS
         echo "=================="
-        gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external -checklinkname=0 -extldflags='-fuse-ld=lld -Wl,--gc-sections -Wl,--icf=all -Wl,-O2'" ./
+        gomobile bind -v -x -androidapi 24 -trimpath -target=android/arm64 -gcflags="all=-l=4" -ldflags="-s -w -linkmode=external -checklinkname=0" ./
         find . -name "*.so" -exec go version -m {} \; | grep -i pgo || echo "❌ PGO NOT APPLIED"
         
         #export CGO_LDFLAGS="-fuse-ld=lld -Wl,-z,separate-loadable-segments -Wl,-z,common-page-size=0x4000 -Wl,-z,max-page-size=0x4000 -Wl,--strip-all -Wl,--gc-sections"
